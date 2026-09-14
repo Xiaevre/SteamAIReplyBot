@@ -1,0 +1,77 @@
+[
+  {
+    "phrase": "互暖",
+    "normalized": "互暖",
+    "category": "warm_social",
+    "language": "zh",
+    "confidence": 0.99,
+    "hitCount": 10,
+    "status": "stable",
+    "lastHit": "2026-09-07T00:00:00.000Z",
+    "source": "manual",
+    "replyTemplates": [
+      "互暖互踩～留下暖暖的小脚印 🐾",
+      "来回踩暖贴啦！祝游戏愉快～"
+    ]
+  },
+  {
+    "phrase": "来踩",
+    "normalized": "来踩",
+    "category": "warm_social",
+    "language": "zh",
+    "confidence": 0.99,
+    "hitCount": 10,
+    "status": "stable",
+    "lastHit": "2026-09-07T00:00:00.000Z",
+    "source": "manual",
+    "replyTemplates": [
+      "欢迎来踩！我也来踩踩你的主页～",
+      "回踩留念！感谢常来逛逛～"
+    ]
+  },
+  {
+    "phrase": "留脚印",
+    "normalized": "留脚印",
+    "category": "warm_social",
+    "language": "zh",
+    "confidence": 0.99,
+    "hitCount": 10,
+    "status": "stable",
+    "lastHit": "2026-09-07T00:00:00.000Z",
+    "source": "manual",
+    "replyTemplates": [
+      "收到脚印啦！回留一只可爱猫爪 🐾",
+      "回踩留爪印～祝今天也是好心情！"
+    ]
+  },
+  {
+    "phrase": "+rep",
+    "normalized": "+rep",
+    "category": "rep",
+    "language": "en",
+    "confidence": 0.99,
+    "hitCount": 10,
+    "status": "stable",
+    "lastHit": "2026-09-07T00:00:00.000Z",
+    "source": "manual",
+    "replyTemplates": [
+      "+rep friendly player, have fun in your games!",
+      "+rep nice profile, good luck!"
+    ]
+  },
+  {
+    "phrase": "nice profile",
+    "normalized": "nice profile",
+    "category": "compliment",
+    "language": "en",
+    "confidence": 0.99,
+    "hitCount": 10,
+    "status": "stable",
+    "lastHit": "2026-09-07T00:00:00.000Z",
+    "source": "manual",
+    "replyTemplates": [
+      "Thank you! Your profile looks awesome too!",
+      "Appreciate it! Yours is really cool as well!"
+    ]
+  }
+]

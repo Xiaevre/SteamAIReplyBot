@@ -1,0 +1,232 @@
+{
+  "greeting": {
+    "zh": [
+      "嗨嗨！祝你今天打游戏开心呀～",
+      "哈喽！感谢来访，天天好心情！",
+      "早哇/晚安！祝你把把连胜～",
+      "你好呀！感谢来踩，祝生活愉快！",
+      "嗨！有空常来玩呀～"
+    ],
+    "en": [
+      "Hey! Thanks for stopping by, have a great day!",
+      "Hello! Hope you're enjoying your games!",
+      "Hi there! Wishing you nice matches and lots of fun!",
+      "Hey mate! Thanks for visiting my profile!"
+    ],
+    "ja": [
+      "こんにちは！足跡ありがとうございます～",
+      "やっほー！今日も良い一日を！",
+      "こんばんは！ゲーム楽しんでね！",
+      "こんにちは！見に来てくれてありがとう！"
+    ]
+  },
+  "warm_social": {
+    "zh": [
+      "回踩暖暖～祝你天天开心！",
+      "来回踩一波！有空一起打游戏呀～",
+      "踩踩！留下一个暖洋洋的脚印 🐾",
+      "互暖互踩～祝新的一天顺心如意！",
+      "回访留念！感谢暖贴～"
+    ],
+    "en": [
+      "Warm return visit! Thanks for dropping by~",
+      "Leaving a warm footprint on your profile! 🐾",
+      "Thanks for stopping by! Have a wonderful gaming week!",
+      "Returning the visit! Hope you have awesome games ahead!"
+    ],
+    "ja": [
+      "足跡お返しです！見に来てくれて嬉しいです～",
+      "ぽかぽかお返し！今日も楽しくゲームしようね～",
+      "お返しの足跡ぺたぺた 🐾 また遊びに来てね！"
+    ]
+  },
+  "compliment": {
+    "zh": [
+      "嘿嘿谢谢夸奖！你的主页也很精致帅气～",
+      "谢谢喜欢！你这边的展柜也超好看的！",
+      "开心！互赞互粉～祝游戏把把 MVP！",
+      "谢谢夸奖呀，被你这么一说心情超好！"
+    ],
+    "en": [
+      "Thank you so much! Your profile looks awesome too!",
+      "Thanks for the compliment! Really appreciate it mate!",
+      "Much appreciated! Your showcases look super cool!"
+    ],
+    "ja": [
+      "褒めてくれてありがとう！あなたのお部屋も素敵ですね～",
+      "嬉しい！ありがとう！あなたのプロフィールもすごく綺麗！"
+    ]
+  },
+  "rep": {
+    "zh": [
+      "+rep 友好的 Steam 玩家，祝游戏把把赢！",
+      "+rep 感谢来踩！祝出金光，抽卡全中！",
+      "+rep 很有礼貌的朋友，祝游戏愉快～",
+      "+rep nice trader & friendly player!"
+    ],
+    "en": [
+      "+rep kind and friendly player, have fun!",
+      "+rep thanks for visiting, wish you good luck in all games!",
+      "+rep awesome profile & great gamer!"
+    ],
+    "ja": [
+      "+rep とても優しいプレイヤー！ゲーム楽しんでね～",
+      "+rep 足跡ありがとう！幸運を祈っています！"
+    ]
+  },
+  "emoji": {
+    "zh": [
+      "(｡･ω･｡) 收到你的表情啦，回赠一个小可爱～",
+      "✨ 带来一束小星星，祝心情愉快！",
+      "🐾 留下暖心脚印～",
+      "(≧◡≦) 开心！愿你每天都有好运气！"
+    ],
+    "en": [
+      "✨ Sending some good vibes back your way! Enjoy your games!",
+      "(｡･ω･｡) Returning with a cute smile! Have fun!",
+      "🐾 Warm paw prints left! Keep smiling!"
+    ],
+    "ja": [
+      "(｡･ω･｡) 可愛い表情ありがとう！お返しです～",
+      "✨ 素敵な一日になりますように！"
+    ]
+  },
+  "emoticon": {
+    "zh": [
+      ":steamhappy: 回踩一个！感谢暖帖～",
+      ":cozyghost: 给你留一只暖暖的小幽灵～",
+      ":steamthumbsup: 赞一个！有空常来逛逛～"
+    ],
+    "en": [
+      ":steamhappy: Thumbs up! Thanks for visiting my page!",
+      ":steamthumbsup: Returning the visit with good energy!",
+      ":cozyghost: Leaving a cozy little emote here for you~"
+    ],
+    "ja": [
+      ":steamhappy: お返しです！見に来てくれてありがとう！",
+      ":steamthumbsup: またいつでも遊びに来てね～"
+    ]
+  },
+  "ascii_art": {
+    "zh": [
+      "哇好炫酷的大表情/字符画！回踩留个可爱脚印 🐾✨",
+      "收到了你的酷炫图案！回访暖暖你的主页～",
+      "捕捉到一只发大表情的可爱玩家！祝欧气满满！"
+    ],
+    "en": [
+      "Awesome ASCII/symbol art! Thanks for making my day, returning the visit! ✨",
+      "Super cool design! Sending warm regards back to your profile! 🐾"
+    ],
+    "ja": [
+      "すごいAAアートありがとう！お返しの足跡を残していきますね ✨🐾"
+    ]
+  },
+  "emoji_pixel_art": {
+    "zh": [
+      "哇！好厉害的像素画/Emoji色块艺术！回踩给你的主页点赞 🐾✨",
+      "太有才了！超酷炫的像素图案，回访暖暖你的主页～",
+      "好棒的 Emoji 画！留下暖洋洋的脚印，祝游戏连胜欧气满满！"
+    ],
+    "en": [
+      "Wow, awesome emoji pixel art! Thanks for sharing, leaving a warm return footprint! 🐾✨",
+      "Super creative emoji art! Dropping by to return the visit, enjoy your gaming!"
+    ],
+    "ja": [
+      "わあ！すごい絵文字ドット絵ですね！お返しの足跡を残していきます 🐾✨",
+      "とっても素敵なピクセルアートありがとう！今日も楽しくゲームしようね～"
+    ]
+  },
+  "braille_art": {
+    "zh": [
+      "哇！太震撼的点字盲文字符画了！回踩留下赞赏脚印 🐾✨",
+      "好强大的 Braille 字符画！回访暖暖你的主页，祝游戏愉快！",
+      "捕捉到高技术力字符画大佬！祝天天好心情，把把连胜！"
+    ],
+    "en": [
+      "Incredible Braille character art! Much respect, dropping by to return the visit! 🐾✨",
+      "Stunning unicode art design! Wishing you great matches ahead! ✨"
+    ],
+    "ja": [
+      "点字アートすごい！お返しの足跡を残していきますね ✨🐾",
+      "高クオリティな文字アートありがとう！今日もゲーム楽しんでね！"
+    ]
+  },
+  "block_art": {
+    "zh": [
+      "哇！好帅气的方块字符画！回踩留个可爱脚印 🐾✨",
+      "很震撼的图案！回访暖贴，祝新的一天游戏顺心如意！"
+    ],
+    "en": [
+      "Awesome block element art! Thanks for brightening my profile, returning the visit! 🐾✨",
+      "Impressive design mate! Have a fantastic gaming week ahead!"
+    ],
+    "ja": [
+      "ブロック文字アートかっこいい！見に来てくれてありがとう！✨🐾"
+    ]
+  },
+  "box_drawing_art": {
+    "zh": [
+      "好精致的线框排版/字符画！回踩留下暖暖脚印 🐾✨",
+      "很特别的框线设计！回访暖暖你的主页～祝生活愉快！"
+    ],
+    "en": [
+      "Super neat box-drawing design! Thanks for stopping by, returning the visit! 🐾✨"
+    ],
+    "ja": [
+      "綺麗な枠線アートありがとう！お返しの足跡ぺたぺた 🐾"
+    ]
+  },
+  "mixed_symbol_art": {
+    "zh": [
+      "哇好炫酷的多元字符艺术！回踩给你的主页留个脚印 🐾✨",
+      "收到了你的超强组合图案！祝欧气满满，把把连胜！"
+    ],
+    "en": [
+      "Incredible mixed symbol art! Thanks for visiting my profile, have an awesome day! 🐾✨"
+    ],
+    "ja": [
+      "すごいシンボルアート！お返しの足跡を残していきます ✨🐾"
+    ]
+  },
+  "visual_expression": {
+    "zh": [
+      "哇好炫酷的视觉大表情/图案！回踩留个可爱脚印 🐾✨",
+      "收到了你的酷炫图案！回访暖暖你的主页～",
+      "好有才的图案！祝你把把连胜，欧气满满！"
+    ],
+    "en": [
+      "Awesome visual art! Thanks for making my day, returning the visit! ✨",
+      "Super cool design! Sending warm regards back to your profile! 🐾"
+    ],
+    "ja": [
+      "すごいビジュアルアートありがとう！お返しの足跡を残していきますね ✨🐾"
+    ]
+  },
+  "decorative": {
+    "zh": [
+      "✨ 收到你的闪亮留言啦，回访祝你一切顺利！",
+      "🌸 留下一瓣春意，祝游戏生活双丰收！"
+    ],
+    "en": [
+      "✨ Thanks for brightening up my profile! Have a fantastic day!",
+      "🌸 Leaving some positive vibes on your page!"
+    ],
+    "ja": [
+      "✨ 素敵なメッセージありがとう！良い一日を～"
+    ]
+  },
+  "short_positive": {
+    "zh": [
+      "好耶！感谢来踩～祝开心！",
+      "收到！祝欧气满满，好运常伴！",
+      "嘿嘿！回踩留念，有空常来！"
+    ],
+    "en": [
+      "Cheers mate! Thanks for dropping by!",
+      "Awesome! Wish you the best of luck in your games!"
+    ],
+    "ja": [
+      "ありがとう！素敵なゲームライフを！"
+    ]
+  }
+}

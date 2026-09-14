@@ -1,0 +1,38 @@
+[
+  {
+    "id": "emoji_gaming_vibes",
+    "type": "emoji",
+    "content": "🎮✨ ( •̀ ω •́ )✧ 游戏愉快！把把超神～ 🏆🔥",
+    "enabled": true,
+    "tags": [
+      "gaming",
+      "victory",
+      "vibes"
+    ],
+    "mood": [
+      "playful",
+      "happy"
+    ],
+    "style": "combo",
+    "weight": 20,
+    "description": "游戏超神组合 Emoji"
+  },
+  {
+    "id": "emoji_tea_cozy",
+    "type": "emoji",
+    "content": "☕🍪 暖暖主页，祝你今天也是美好的一天～ 🌸🍃",
+    "enabled": true,
+    "tags": [
+      "cozy",
+      "warm",
+      "tea"
+    ],
+    "mood": [
+      "warm",
+      "relaxing"
+    ],
+    "style": "combo",
+    "weight": 20,
+    "description": "午后红茶治愈 Emoji"
+  }
+]

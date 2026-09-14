@@ -1,0 +1,54 @@
+[
+  {
+    "id": "braille_sparkle_heart",
+    "type": "braille",
+    "content": "⢀⡤⣄⡀⠀⠀⠀⠀⣀⣤⡀\n⢠⡏⠀⠈⠳⡄⢠⠞⠁⠀⢹⡄\n⠘⣇⠀⠀⠀⠹⠏⠀⠀⠀⢸⠃\n⠀⠘⢧⡀⠀⠀⠀⠀⠀⡴⠃⠀\n⠀⠀⠀⠉⠓⠲⠤⠖⠛⠁⠀⠀",
+    "enabled": true,
+    "tags": [
+      "heart",
+      "warm",
+      "compact"
+    ],
+    "mood": [
+      "happy",
+      "friendly"
+    ],
+    "style": "compact",
+    "weight": 20,
+    "description": "精致小型 Braille 爱心"
+  },
+  {
+    "id": "braille_cute_paw",
+    "type": "braille",
+    "content": "⠀⢀⣠⣄⡀⠀⢀⣀⣀⡀⠀\n⠀⣾⠁⠈⢹⣆⣼⠃⠀⢹⡆\n⠀⠙⠷⠶⠿⠋⠹⠷⠶⠿⠃\n⠀⢀⣴⣶⣄⠀⣠⣶⣦⡀⠀\n⠀⢸⣿⣿⣿⣿⣿⣿⣿⡇⠀\n⠀⠈⠻⢿⣿⣿⣿⣿⠟⠁⠀",
+    "enabled": true,
+    "tags": [
+      "paw",
+      "cat",
+      "cute"
+    ],
+    "mood": [
+      "playful",
+      "friendly"
+    ],
+    "style": "compact",
+    "weight": 15,
+    "description": "可爱猫爪 Braille"
+  },
+  {
+    "id": "braille_star_sparkle",
+    "type": "braille",
+    "content": "⠀⠀⠀⢠⡄⠀⠀⠀\n⠀⠀⢀⣸⣇⡀⠀⠀\n⠒⠚⠛⣿⣿⠛⠓⠒\n⠀⠀⠘⠛⣿⠃⠀⠀\n⠀⠀⠀⠠⠿⠄⠀⠀",
+    "enabled": true,
+    "tags": [
+      "star",
+      "sparkle"
+    ],
+    "mood": [
+      "positive"
+    ],
+    "style": "mini",
+    "weight": 12,
+    "description": "闪烁小星星"
+  }
+]

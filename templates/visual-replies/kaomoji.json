@@ -1,0 +1,72 @@
+[
+  {
+    "id": "kaomoji_warm_heart",
+    "type": "kaomoji",
+    "content": "(｡･ω･｡)ﾉ♡ 来踩踩～祝游戏愉快！",
+    "enabled": true,
+    "tags": [
+      "warm",
+      "greeting",
+      "heart"
+    ],
+    "mood": [
+      "happy",
+      "friendly"
+    ],
+    "style": "single_line",
+    "weight": 25,
+    "description": "温暖爱心挥手颜文字"
+  },
+  {
+    "id": "kaomoji_happy_sparkle",
+    "type": "kaomoji",
+    "content": "✨(*^▽^*)✨ 感谢回访！今天也要开开心心玩游戏～",
+    "enabled": true,
+    "tags": [
+      "happy",
+      "sparkle"
+    ],
+    "mood": [
+      "happy",
+      "playful"
+    ],
+    "style": "single_line",
+    "weight": 20,
+    "description": "开朗笑脸颜文字"
+  },
+  {
+    "id": "kaomoji_polite_bow",
+    "type": "kaomoji",
+    "content": "(ฅ´ω`ฅ) 暖暖主页～祝顺顺利利！",
+    "enabled": true,
+    "tags": [
+      "cute",
+      "cat",
+      "polite"
+    ],
+    "mood": [
+      "friendly",
+      "warm"
+    ],
+    "style": "single_line",
+    "weight": 18,
+    "description": "萌萌小猫爪颜文字"
+  },
+  {
+    "id": "kaomoji_victory_cheer",
+    "type": "kaomoji",
+    "content": "(๑•̀ㅂ•́)و✧ 加油冲冲冲！常来玩哦～",
+    "enabled": true,
+    "tags": [
+      "cheer",
+      "power"
+    ],
+    "mood": [
+      "positive",
+      "playful"
+    ],
+    "style": "single_line",
+    "weight": 15,
+    "description": "打气奋斗颜文字"
+  }
+]

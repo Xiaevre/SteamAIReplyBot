@@ -1,0 +1,18 @@
+[
+  {
+    "id": "steam_plus_rep_friendly",
+    "type": "steam",
+    "content": "➕ ʀᴇᴘ ✨ 友善的 Steam 好友！常来常往～ 🎮",
+    "enabled": true,
+    "tags": [
+      "rep",
+      "steam_style"
+    ],
+    "mood": [
+      "friendly"
+    ],
+    "style": "steam_rep",
+    "weight": 15,
+    "description": "经典 Steam +rep 风格回访"
+  }
+]

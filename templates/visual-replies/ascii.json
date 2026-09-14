@@ -1,0 +1,37 @@
+[
+  {
+    "id": "ascii_mini_bunny",
+    "type": "ascii",
+    "content": " /\\_/\\\n( o.o )\n > ^ <  ✨ 感谢来踩！",
+    "enabled": true,
+    "tags": [
+      "bunny",
+      "cat",
+      "mini"
+    ],
+    "mood": [
+      "cute",
+      "friendly"
+    ],
+    "style": "compact",
+    "weight": 15,
+    "description": "迷你小兔/小猫 ASCII"
+  },
+  {
+    "id": "ascii_star_badge",
+    "type": "ascii",
+    "content": " ★*゜*☆*゜*★\n 祝你天天开心！\n ★*゜*☆*゜*★",
+    "enabled": true,
+    "tags": [
+      "star",
+      "blessing"
+    ],
+    "mood": [
+      "happy",
+      "warm"
+    ],
+    "style": "badge",
+    "weight": 15,
+    "description": "星光祝福横幅"
+  }
+]

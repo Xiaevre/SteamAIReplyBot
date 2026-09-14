@@ -1,0 +1,894 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Steam AI Reply Bot - 管理控制面板</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><circle cx='50' cy='50' r='48' fill='%23171a21' stroke='%2366c0f4' stroke-width='4'/><path d='M50 20 A30 30 0 0 1 80 50 A30 30 0 0 1 50 80 A30 30 0 0 1 20 50 Z' fill='%2366c0f4' opacity='0.8'/></svg>">
+</head>
+<body>
+  <div class="app-container">
+    <!-- Top Header -->
+    <header class="top-header">
+      <div class="header-brand">
+        <div class="brand-icon">
+          <svg viewBox="0 0 24 24" width="24" height="24" stroke="currentColor" stroke-width="2" fill="none">
+            <circle cx="12" cy="12" r="10"></circle>
+            <polygon points="12 8 8 12 12 16 16 12 12 8"></polygon>
+          </svg>
+        </div>
+        <div class="brand-text">
+          <span class="brand-title">Steam AI Reply Bot</span>
+          <span class="brand-subtitle">管理控制面板</span>
+        </div>
+      </div>
+
+      <div class="header-center-status">
+        <div class="status-indicator-pill" id="global-status-pill">
+          <span class="status-dot pulsating"></span>
+          <span class="status-text" id="header-status-text">连接中...</span>
+        </div>
+        <div class="status-indicator-pill" id="global-session-pill">
+          <span class="status-dot"></span>
+          <span class="status-text" id="header-session-text">会话检测中...</span>
+        </div>
+      </div>
+
+      <div class="header-actions">
+        <button class="btn btn-warning btn-sm" id="btn-header-power" title="关闭或恢复机器人">
+          <span id="btn-header-power-text">⏸️ 关闭机器人</span>
+        </button>
+        <button class="btn btn-secondary btn-sm" id="btn-header-pause" title="暂停队列">
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
+          暂停
+        </button>
+        <button class="btn btn-primary btn-sm" id="btn-header-resume" title="继续运行">
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+          继续
+        </button>
+        <button class="btn btn-danger btn-sm" id="btn-header-emergency" title="紧急停止全部调度">
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><rect x="5" y="5" width="14" height="14"/></svg>
+          急停
+        </button>
+      </div>
+    </header>
+
+    <!-- Main Workspace Layout -->
+    <div class="main-layout">
+      <!-- Sidebar Navigation -->
+      <nav class="sidebar">
+        <ul class="nav-menu">
+          <li class="nav-item active" data-view="dashboard">
+            <span class="nav-icon">📊</span>
+            <span class="nav-label">仪表盘</span>
+          </li>
+          <li class="nav-item" data-view="tasks">
+            <span class="nav-icon">📋</span>
+            <span class="nav-label">任务队列</span>
+            <span class="nav-badge" id="sidebar-pending-badge" style="display: none;">0</span>
+          </li>
+          <li class="nav-item" data-view="session">
+            <span class="nav-icon">🔑</span>
+            <span class="nav-label">登录会话</span>
+          </li>
+          <li class="nav-item" data-view="visual-replies">
+            <span class="nav-icon">🎨</span>
+            <span class="nav-label">视觉素材库</span>
+          </li>
+          <li class="nav-item" data-view="profile-analysis">
+            <span class="nav-icon">🧠</span>
+            <span class="nav-label">我的 Steam 画像</span>
+          </li>
+          <li class="nav-item" data-view="settings">
+            <span class="nav-icon">⚙️</span>
+            <span class="nav-label">参数配置</span>
+          </li>
+          <li class="nav-item" data-view="logs">
+            <span class="nav-icon">📜</span>
+            <span class="nav-label">实时日志</span>
+          </li>
+        </ul>
+
+        <div class="sidebar-bottom">
+          <a href="https://github.com/Xiaevre/SteamAIReplyBot" target="_blank" rel="noopener noreferrer" class="sidebar-github-link" id="sidebar-github-link" title="访问 GitHub 开源项目仓库 (新标签页打开)">
+            <span class="github-icon">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+                <path d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.53 1.032 1.53 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z"/>
+              </svg>
+            </span>
+            <span class="github-label">GitHub / Source</span>
+            <svg class="external-icon" viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
+              <polyline points="15 3 21 3 21 9"></polyline>
+              <line x1="10" y1="14" x2="21" y2="3"></line>
+            </svg>
+          </a>
+          <div class="sidebar-footer">
+            <div class="info-row">
+              <span>运行时长:</span>
+              <span id="uptime-label">0s</span>
+            </div>
+            <div class="info-row">
+              <span>内存占用:</span>
+              <span id="memory-label">0 MB</span>
+            </div>
+          </div>
+        </div>
+      </nav>
+
+      <!-- View Content Area -->
+      <main class="content-view">
+
+        <!-- 1. DASHBOARD VIEW -->
+        <section id="view-dashboard" class="view-panel active">
+          <div class="view-header">
+            <h2>运行概览与监控</h2>
+            <div class="header-refresh-info">
+              <span id="last-sync-time">实时同步中</span>
+              <button class="btn btn-icon btn-sm" id="btn-manual-refresh" title="立即刷新">🔄</button>
+            </div>
+          </div>
+
+          <!-- Top Metric Cards Grid -->
+          <div class="metrics-grid">
+            <div class="card metric-card">
+              <div class="metric-title">今日总回复数</div>
+              <div class="metric-value text-accent" id="metric-today-replies">0</div>
+              <div class="metric-foot">
+                <span>本地/视觉: <b id="metric-local-replies">0</b></span>
+                <span>AI生成: <b id="metric-ai-replies">0</b></span>
+                <span>节日问候: <b id="metric-holiday-replies">0</b></span>
+              </div>
+            </div>
+
+            <div class="card metric-card">
+              <div class="metric-title">待处理任务</div>
+              <div class="metric-value text-warning" id="metric-pending-tasks">0</div>
+              <div class="metric-foot">
+                <span>等待登录: <b id="metric-waiting-login-tasks">0</b></span>
+                <span>不确定: <b id="metric-uncertain-tasks">0</b></span>
+              </div>
+            </div>
+
+            <div class="card metric-card">
+              <div class="metric-title">智能过滤防护</div>
+              <div class="metric-value text-success" id="metric-saved-requests">0</div>
+              <div class="metric-foot">
+                <span>垃圾拦截: <b id="metric-spam-count">0</b></span>
+                <span>表情符过滤: <b id="metric-visual-count">0</b></span>
+              </div>
+            </div>
+
+            <div class="card metric-card">
+              <div class="metric-title">Steam 登录会话</div>
+              <div class="metric-value" id="metric-session-status">检测中</div>
+              <div class="metric-foot">
+                <span>当前账号: <b id="metric-account-name">-</b></span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Human-Friendly Status Box -->
+          <div class="dashboard-human-box" id="dashboard-human-card">
+            <div class="dashboard-human-status">
+              <div class="dashboard-human-item">
+                <span class="dashboard-human-label">Steam Session</span>
+                <span class="dashboard-human-val" id="human-session-val">🔴 未登录</span>
+              </div>
+              <div class="dashboard-human-item">
+                <span class="dashboard-human-label">发送队列</span>
+                <span class="dashboard-human-val" id="human-queue-val">⏸ 已暂停</span>
+              </div>
+              <div class="dashboard-human-item">
+                <span class="dashboard-human-label">状态原因</span>
+                <span class="dashboard-human-val" id="human-reason-val" style="font-weight: 500; font-size: 13px; color: var(--color-warning);">Steam 登录会话无效</span>
+              </div>
+            </div>
+            <div class="dashboard-human-action" id="human-action-box">
+              <button class="btn btn-warning" id="btn-human-login">🔑 登录 Steam</button>
+            </div>
+          </div>
+
+          <!-- Status & Controls Row -->
+          <div class="dashboard-row">
+            <!-- Left Card: Control Panel -->
+            <div class="card flex-1">
+              <div class="card-header">
+                <h3>🕹️ 快速控制台</h3>
+              </div>
+              <div class="card-body">
+                <!-- Bot Mode Selector -->
+                <div class="mode-selector-wrap mb-3">
+                  <div class="text-xs text-muted mb-2" style="font-weight: 600;">⚙️ 运行策略模式 (Bot Mode)</div>
+                  <div class="mode-btn-group" id="mode-btn-group" style="display: flex; gap: 6px; flex-wrap: wrap;">
+                    <button type="button" class="btn btn-sm btn-outline mode-btn" data-mode="LOCAL_ONLY" id="btn-mode-local" title="仅调用本地规则与视觉库，0 Token 消耗">纯本地免Token</button>
+                    <button type="button" class="btn btn-sm btn-outline mode-btn active" data-mode="AI_ENHANCED" id="btn-mode-ai" title="复杂留言智能调用 DeepSeek AI 回复">AI 智能增强</button>
+                    <button type="button" class="btn btn-sm btn-outline mode-btn" data-mode="DISABLED" id="btn-mode-disabled" title="仅监控留言板，停止向外发送任何回复">暂停回复队列</button>
+                  </div>
+                </div>
+
+                <div class="control-btn-group">
+                  <button class="btn btn-primary" id="btn-ctrl-resume">
+                    ▶️ 继续发送队列
+                  </button>
+                  <button class="btn btn-secondary" id="btn-ctrl-pause">
+                    ⏸️ 暂停发送队列
+                  </button>
+                  <button class="btn btn-outline" id="btn-ctrl-check-session">
+                    🔍 立即体检 Steam 会话
+                  </button>
+                  <button class="btn btn-outline-warning" id="btn-ctrl-open-login">
+                    🔑 唤起 Steam 登录向导
+                  </button>
+                  <button class="btn btn-danger" id="btn-ctrl-emergency">
+                    🛑 紧急停止 (Emergency Stop)
+                  </button>
+                </div>
+
+                <div class="banner-box mt-3" id="dashboard-notice-box">
+                  <span class="banner-icon">ℹ️</span>
+                  <div class="banner-content" id="dashboard-notice-text">
+                    系统调度器正在正常轮询。未发现异常中断。
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Right Card: Monitor & Latest Send Inspector -->
+            <div class="card flex-1">
+              <div class="card-header">
+                <h3>📡 最近轮询与发送监视</h3>
+              </div>
+              <div class="card-body">
+                <div class="detail-row">
+                  <span class="detail-label">最近轮询时间:</span>
+                  <span class="detail-value" id="disp-last-polled">从未</span>
+                </div>
+                <div class="detail-row">
+                  <span class="detail-label">下次预计轮询:</span>
+                  <span class="detail-value" id="disp-next-polled">计算中...</span>
+                </div>
+                <div class="detail-row">
+                  <span class="detail-label">运行策略模式:</span>
+                  <span class="detail-value" id="disp-bot-mode"><span class="badge badge-info">AI_ENHANCED</span></span>
+                </div>
+                <div class="detail-row">
+                  <span class="detail-label">浏览器内核状态:</span>
+                  <span class="detail-value" id="disp-browser-state"><span class="badge badge-success">ACTIVE</span></span>
+                </div>
+                <div class="detail-row">
+                  <span class="detail-label">最近发送目标:</span>
+                  <span class="detail-value text-break" id="disp-last-target">无</span>
+                </div>
+                <div class="detail-row">
+                  <span class="detail-label">最近发送状态:</span>
+                  <span class="detail-value" id="disp-last-send-status">无</span>
+                </div>
+                <div class="detail-row">
+                  <span class="detail-label">最近发送结果摘要:</span>
+                  <span class="detail-value text-break" id="disp-last-send-msg">-</span>
+                </div>
+                <div class="detail-row">
+                  <span class="detail-label">个人主页配置:</span>
+                  <span class="detail-value text-break" id="disp-config-profile">-</span>
+                </div>
+                <div class="detail-row">
+                  <span class="detail-label">前后台运行形态:</span>
+                  <span class="detail-value" id="disp-config-mode">HEADLESS (无头)</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- 2. TASKS VIEW -->
+        <section id="view-tasks" class="view-panel">
+          <div class="view-header">
+            <h2>回复任务大厅</h2>
+            <div class="filter-group">
+              <button class="filter-pill active" data-filter="all">全部</button>
+              <button class="filter-pill" data-filter="waiting">待发送</button>
+              <button class="filter-pill" data-filter="replied">已回复</button>
+              <button class="filter-pill" data-filter="failed">失败</button>
+              <button class="filter-pill" data-filter="waiting_for_login">等待登录</button>
+              <button class="filter-pill" data-filter="uncertain_send_state">状态待确认</button>
+            </div>
+          </div>
+
+          <div class="card table-card">
+            <div class="table-responsive">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>任务ID</th>
+                    <th>评论者</th>
+                    <th>原留言内容</th>
+                    <th>分类策略</th>
+                    <th>拟回复内容</th>
+                    <th>状态</th>
+                    <th>创建时间</th>
+                    <th>操作</th>
+                  </tr>
+                </thead>
+                <tbody id="tasks-table-body">
+                  <tr><td colspan="8" class="text-center py-4">加载中...</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- 3. SESSION VIEW -->
+        <section id="view-session" class="view-panel">
+          <div class="view-header">
+            <h2>Steam 认证会话中心</h2>
+            <div>
+              <button class="btn btn-outline" id="btn-session-recheck">🔄 重新体检会话</button>
+              <button class="btn btn-primary" id="btn-session-login">🔑 唤起登录窗口</button>
+            </div>
+          </div>
+
+          <div class="session-grid">
+            <div class="card">
+              <div class="card-header">
+                <h3>👤 当前认证身份</h3>
+              </div>
+              <div class="card-body">
+                <div class="session-identity-box">
+                  <div class="avatar-placeholder" id="session-avatar">🎮</div>
+                  <div class="session-identity-meta">
+                    <h4 id="session-account-name">未登录</h4>
+                    <p class="text-muted" id="session-steamid">SteamID: (none)</p>
+                    <a href="#" target="_blank" class="profile-link" id="session-profile-link">主页链接</a>
+                  </div>
+                </div>
+
+                <div class="session-metrics-list mt-4">
+                  <div class="detail-row">
+                    <span class="detail-label">会话有效性:</span>
+                    <span class="badge" id="session-valid-badge">未知</span>
+                  </div>
+                  <div class="detail-row">
+                    <span class="detail-label">steamLoginSecure 凭证:</span>
+                    <span class="badge" id="session-cookie-login">未检测</span>
+                  </div>
+                  <div class="detail-row">
+                    <span class="detail-label">sessionid 会话标识:</span>
+                    <span class="badge" id="session-cookie-sessid">未检测</span>
+                  </div>
+                  <div class="detail-row">
+                    <span class="detail-label">最后一次成功体检:</span>
+                    <span class="detail-value" id="session-last-check">从未</span>
+                  </div>
+                  <div class="detail-row">
+                    <span class="detail-label">最近失败原因:</span>
+                    <span class="detail-value text-danger" id="session-fail-reason">无</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="card">
+              <div class="card-header">
+                <h3>🛡️ 凭证管理与说明</h3>
+              </div>
+              <div class="card-body">
+                <div class="guide-box">
+                  <h4>持久化 Profile 说明</h4>
+                  <p>本程序采用独立的浏览器 Profile 存储凭证：</p>
+                  <code>release/data/browser-profile</code>
+                  <p class="mt-2 text-success">
+                    ✅ 无论何时重新登录，系统均严格复用该目录，绝不删除、清空或重建，完全保证会话连续性。
+                  </p>
+                  <p class="mt-2 text-warning">
+                    ⚠️ 若 Steam 手机令牌或密码变更，请点击右上角<b>“唤起登录窗口”</b>，在弹出的 Chrome 窗口中扫码或输入验证码即可无缝完成续期。
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- 4. SETTINGS VIEW -->
+        <section id="view-settings" class="view-panel">
+          <div class="view-header">
+            <h2>系统运行参数配置</h2>
+            <button class="btn btn-success" id="btn-save-settings">💾 保存配置修改</button>
+          </div>
+
+          <form id="settings-form" class="settings-form">
+            <!-- Group 1: Steam Profile & Polling -->
+            <div class="card mb-3">
+              <div class="card-header"><h3>🌐 个人主页与轮询间隔</h3></div>
+              <div class="card-body form-grid">
+                <div class="form-group">
+                  <label for="cfg-steam-profile">个人主页完整 URL (STEAM_PROFILE_URL):</label>
+                  <input type="text" id="cfg-steam-profile" name="STEAM_PROFILE_URL" placeholder="https://steamcommunity.com/id/your_id/">
+                </div>
+                <div class="form-group">
+                  <label for="cfg-poll-min">最小轮询间隔 (秒):</label>
+                  <input type="number" id="cfg-poll-min" name="CHECK_INTERVAL_MIN_SECONDS" min="10" max="3600">
+                </div>
+                <div class="form-group">
+                  <label for="cfg-poll-max">最大轮询间隔 (秒):</label>
+                  <input type="number" id="cfg-poll-max" name="CHECK_INTERVAL_MAX_SECONDS" min="10" max="3600">
+                </div>
+              </div>
+            </div>
+
+            <!-- Group 2: Rate Limiting & Delays -->
+            <div class="card mb-3">
+              <div class="card-header"><h3>⏱️ 频控配额与拟人延迟</h3></div>
+              <div class="card-body form-grid">
+                <div class="form-group">
+                  <label for="cfg-delay-min">最小发送延迟 (秒):</label>
+                  <input type="number" id="cfg-delay-min" name="MIN_REPLY_DELAY_SECONDS" min="0" max="600">
+                </div>
+                <div class="form-group">
+                  <label for="cfg-delay-max">最大发送延迟 (秒):</label>
+                  <input type="number" id="cfg-delay-max" name="MAX_REPLY_DELAY_SECONDS" min="0" max="600">
+                </div>
+                <div class="form-group">
+                  <label for="cfg-hourly-limit">每小时最大回复数:</label>
+                  <input type="number" id="cfg-hourly-limit" name="MAX_REPLIES_PER_HOUR" min="1" max="100">
+                </div>
+                <div class="form-group">
+                  <label for="cfg-daily-limit">每日最大回复数:</label>
+                  <input type="number" id="cfg-daily-limit" name="MAX_REPLIES_PER_DAY" min="1" max="500">
+                </div>
+              </div>
+            </div>
+
+            <!-- Group 3: DeepSeek AI -->
+            <div class="card mb-3">
+              <div class="card-header"><h3>🧠 DeepSeek AI 接口配置</h3></div>
+              <div class="card-body form-grid">
+                <div class="form-group span-2">
+                  <label for="cfg-deepseek-key">API Key (DEEPSEEK_API_KEY):</label>
+                  <input type="password" id="cfg-deepseek-key" name="DEEPSEEK_API_KEY" placeholder="sk-...">
+                </div>
+                <div class="form-group">
+                  <label for="cfg-deepseek-model">模型名称 (DEEPSEEK_MODEL):</label>
+                  <input type="text" id="cfg-deepseek-model" name="DEEPSEEK_MODEL" placeholder="deepseek-chat">
+                </div>
+                <div class="form-group">
+                  <label for="cfg-deepseek-url">API Base URL:</label>
+                  <input type="text" id="cfg-deepseek-url" name="DEEPSEEK_BASE_URL" placeholder="https://api.deepseek.com/v1">
+                </div>
+              </div>
+            </div>
+
+            <!-- Group 4: Runtime Switches -->
+            <div class="card mb-3">
+              <div class="card-header"><h3>🛠️ 模式与开关</h3></div>
+              <div class="card-body form-grid">
+                <div class="form-group checkbox-group">
+                  <label>
+                    <input type="checkbox" id="cfg-dry-run" name="DRY_RUN">
+                    <span>演练模式 (DRY_RUN - 生成回复但不向 Steam 发送)</span>
+                  </label>
+                </div>
+                <div class="form-group checkbox-group">
+                  <label>
+                    <input type="checkbox" id="cfg-headless" name="HEADLESS">
+                    <span>无头浏览器 (HEADLESS - 后台静默执行)</span>
+                  </label>
+                </div>
+              </div>
+            </div>
+
+            <!-- Group 5: Holiday Greetings & Language -->
+            <div class="card mb-3">
+              <div class="card-header"><h3>🎄 节日主动问候与默认语言</h3></div>
+              <div class="card-body form-grid">
+                <div class="form-group">
+                  <label for="cfg-holiday-max">节日每天最大问候数 (MAX_HOLIDAY_MESSAGES_PER_DAY):</label>
+                  <input type="number" id="cfg-holiday-max" name="MAX_HOLIDAY_MESSAGES_PER_DAY" min="0" max="100">
+                </div>
+                <div class="form-group">
+                  <label for="cfg-holiday-days">活跃资格窗口天数 (HOLIDAY_ACTIVE_DAYS):</label>
+                  <input type="number" id="cfg-holiday-days" name="HOLIDAY_ACTIVE_DAYS" min="1" max="365">
+                </div>
+                <div class="form-group">
+                  <label for="cfg-holiday-start">问候起始时间 (HOLIDAY_SEND_START):</label>
+                  <input type="text" id="cfg-holiday-start" name="HOLIDAY_SEND_START" placeholder="09:00">
+                </div>
+                <div class="form-group">
+                  <label for="cfg-holiday-end">问候截止时间 (HOLIDAY_SEND_END):</label>
+                  <input type="text" id="cfg-holiday-end" name="HOLIDAY_SEND_END" placeholder="22:00">
+                </div>
+                <div class="form-group">
+                  <label for="cfg-default-language">默认回复语言 (DEFAULT_LANGUAGE):</label>
+                  <select id="cfg-default-language" name="DEFAULT_LANGUAGE" class="form-control">
+                    <option value="zh">中文 (zh)</option>
+                    <option value="en">English (en)</option>
+                    <option value="ja">日本語 (ja)</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            <!-- Group 6: Windows Autostart -->
+            <div class="card mb-3">
+              <div class="card-header"><h3>🚀 Windows 任务计划开机自启</h3></div>
+              <div class="card-body">
+                <div class="detail-row mb-2">
+                  <span class="detail-label">自启动状态:</span>
+                  <span class="badge badge-secondary" id="autostart-status-badge">检测中...</span>
+                </div>
+                <div class="detail-row mb-2">
+                  <span class="detail-label">触发类型 (Trigger):</span>
+                  <span class="detail-value" id="autostart-trigger-val">-</span>
+                </div>
+                <div class="detail-row mb-3">
+                  <span class="detail-label">详细信息:</span>
+                  <span class="detail-value text-muted text-sm" id="autostart-details-val">-</span>
+                </div>
+                <div class="form-row" style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+                  <select id="autostart-trigger-select" class="form-control" style="width: auto; min-width: 200px;">
+                    <option value="ONSTART">系统开机自启 (ONSTART - 推荐挂机)</option>
+                    <option value="ONLOGON">用户登录自启 (ONLOGON)</option>
+                  </select>
+                  <button type="button" class="btn btn-primary" id="btn-autostart-enable">开启自启动</button>
+                  <button type="button" class="btn btn-secondary" id="btn-autostart-disable">禁用自启动</button>
+                </div>
+              </div>
+            </div>
+          </form>
+        </section>
+
+        <!-- 5. LOGS VIEW -->
+        <section id="view-logs" class="view-panel">
+          <div class="view-header">
+            <h2>运行日志中心</h2>
+            <div class="log-controls">
+              <input type="text" id="log-search-input" placeholder="搜索关键词..." class="input-sm">
+              <label class="mode-switch-wrap" title="勾选后显示原始技术事件与参数">
+                <input type="checkbox" id="toggle-tech-logs">
+                <span>显示技术日志</span>
+              </label>
+              <label class="autoscroll-toggle">
+                <input type="checkbox" id="log-autoscroll" checked>
+                <span>自动滚动</span>
+              </label>
+              <button class="btn btn-secondary btn-sm" id="btn-clear-logs">清屏</button>
+            </div>
+          </div>
+
+          <!-- Category Filter Pills -->
+          <div class="log-mode-bar">
+            <div class="log-category-pills" id="log-category-pills">
+              <button class="log-cat-pill active" data-cat="all">全部</button>
+              <button class="log-cat-pill" data-cat="important">重要 ⭐</button>
+              <button class="log-cat-pill" data-cat="error">错误 🔴</button>
+              <button class="log-cat-pill" data-cat="success">成功 🟢</button>
+              <button class="log-cat-pill" data-cat="task">任务 📋</button>
+              <button class="log-cat-pill" data-cat="steam">Steam 🎮</button>
+              <button class="log-cat-pill" data-cat="send">发送 💬</button>
+            </div>
+          </div>
+
+          <div class="card log-console-card">
+            <!-- User Logs View (Default) -->
+            <div class="user-log-list log-stream" id="user-log-container">
+              <div class="text-muted text-center py-4">正在载入用户友好运行日志...</div>
+            </div>
+            <!-- Technical Logs View (Advanced Mode) -->
+            <div class="log-stream" id="log-stream-container" style="display: none;">
+              <div class="log-entry log-entry-info">
+                <span class="log-time">[--:--:--]</span>
+                <span class="log-badge badge-info">INIT</span>
+                <span class="log-msg">正在连接本地日志通道...</span>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- 6. VISUAL REPLIES VIEW -->
+        <section id="view-visual-replies" class="view-panel">
+          <div class="view-header">
+            <div>
+              <h2>视觉回复素材库</h2>
+              <p class="text-muted text-sm mt-1">
+                人工精选素材库优先于算法程序生成。支持按类型、情绪与标签筛选，支持权重随机与防重复冷却。
+              </p>
+            </div>
+            <div class="header-actions">
+              <button class="btn btn-primary" id="btn-add-visual-item">➕ 添加素材</button>
+            </div>
+          </div>
+
+          <!-- Type Filter Top Pills Bar -->
+          <div class="visual-mode-bar mb-3">
+            <div class="visual-category-pills" id="visual-type-pills">
+              <button class="visual-cat-pill active" data-type="all">全部</button>
+              <button class="visual-cat-pill" data-type="braille">Braille</button>
+              <button class="visual-cat-pill" data-type="ascii">ASCII</button>
+              <button class="visual-cat-pill" data-type="kaomoji">颜文字</button>
+              <button class="visual-cat-pill" data-type="emoji">Emoji</button>
+              <button class="visual-cat-pill" data-type="steam">Steam</button>
+              <button class="visual-cat-pill" data-type="custom">自定义</button>
+            </div>
+          </div>
+
+          <!-- Filter & Search Toolbar -->
+          <div class="visual-toolbar card mb-3">
+            <div class="toolbar-left">
+              <div class="filter-group">
+                <label>素材类型:</label>
+                <select id="visual-type-filter" class="form-control">
+                  <option value="all">全部类型 (All)</option>
+                  <option value="braille">Braille 盲文字符画</option>
+                  <option value="ascii">ASCII 经典字符画</option>
+                  <option value="kaomoji">颜文字 (Kaomoji)</option>
+                  <option value="emoji">Emoji 组合</option>
+                  <option value="steam">Steam 风格 (+rep)</option>
+                  <option value="custom">自定义 (Custom)</option>
+                </select>
+              </div>
+              <div class="filter-group">
+                <label>状态:</label>
+                <select id="visual-enabled-filter" class="form-control">
+                  <option value="all">全部状态</option>
+                  <option value="enabled">仅已启用</option>
+                  <option value="disabled">仅已禁用</option>
+                </select>
+              </div>
+            </div>
+            <div class="toolbar-right">
+              <span class="text-muted text-sm" id="visual-count-label">共 0 个素材</span>
+            </div>
+          </div>
+
+          <!-- Visual Items Grid Container -->
+          <div class="visual-grid" id="visual-items-container">
+            <div class="text-muted text-center py-4">正在载入视觉素材库...</div>
+          </div>
+        </section>
+
+        <!-- 6. PROFILE ANALYSIS VIEW -->
+        <section id="view-profile-analysis" class="view-panel">
+          <div class="view-header">
+            <div>
+              <h2>🧠 我的 Steam 画像与知识库</h2>
+              <p class="text-muted text-sm">Steam 原始事实采集 → 本地知识库 → 低频 DeepSeek 整理 → 用户审批 Persona 建议</p>
+            </div>
+            <div class="header-actions">
+              <button class="btn btn-secondary btn-sm" id="btn-profile-sync" title="从当前已登录 Steam 采集资料与展柜">
+                🔄 同步 Steam 资料
+              </button>
+              <button class="btn btn-primary btn-sm" id="btn-profile-analyze" title="低频调用 DeepSeek 提取事实、推断与建议">
+                ⚡ 分析我的 Steam 画像
+              </button>
+              <button class="btn btn-outline btn-sm" id="btn-profile-force-analyze" title="忽略指纹缓存强制重新分析">
+                强制重新分析
+              </button>
+            </div>
+          </div>
+
+          <!-- Status & Fingerprint Banner -->
+          <div class="card mb-3 p-3">
+            <div class="row align-items-center" style="display: flex; justify-content: space-between; flex-wrap: wrap; gap: 10px;">
+              <div>
+                <span class="badge" id="profile-meta-status">状态: 未同步</span>
+                <span class="text-muted text-sm ml-2" id="profile-meta-sync-time">最后同步: 从未</span>
+                <span class="text-muted text-sm ml-2" id="profile-meta-analyze-time">最后分析: 从未</span>
+              </div>
+              <div class="text-sm font-mono text-muted">
+                指纹 Fingerprint: <span id="profile-meta-fingerprint">无</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Sub-tabs for Profile Analysis -->
+          <div class="visual-mode-bar mb-3">
+            <div class="visual-category-pills" id="profile-subtab-pills">
+              <button class="visual-cat-pill active" data-tab="overview">概览画像</button>
+              <button class="visual-cat-pill" data-tab="facts">客观事实 (Facts)</button>
+              <button class="visual-cat-pill" data-tab="inferences">AI 推断 (Inferences)</button>
+              <button class="visual-cat-pill" data-tab="suggestions">Persona 建议 (需审批)</button>
+              <button class="visual-cat-pill" data-tab="formal">正式 Persona</button>
+              <button class="visual-cat-pill" data-tab="raw">原始快照 (Snapshot)</button>
+            </div>
+          </div>
+
+          <!-- Profile Tab 1: Overview -->
+          <div class="profile-tab-content active" id="profile-tab-overview">
+            <div class="row" style="display: flex; gap: 15px; flex-wrap: wrap;">
+              <div class="col card p-3" style="flex: 1; min-width: 280px;">
+                <h4>Steam 账号与主页 DIY</h4>
+                <div id="profile-overview-account" class="mt-2 text-sm text-muted">
+                  请先点击上方【同步 Steam 资料】
+                </div>
+              </div>
+              <div class="col card p-3" style="flex: 1; min-width: 280px;">
+                <h4>游戏偏好与活跃重点</h4>
+                <div id="profile-overview-games" class="mt-2 text-sm text-muted">
+                  尚未分析
+                </div>
+              </div>
+              <div class="col card p-3" style="flex: 1; min-width: 280px;">
+                <h4>审美倾向与社交表达</h4>
+                <div id="profile-overview-aesthetic" class="mt-2 text-sm text-muted">
+                  尚未分析
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Profile Tab 2: Facts -->
+          <div class="profile-tab-content" id="profile-tab-facts" style="display: none;">
+            <div class="card p-3">
+              <div class="d-flex justify-content-between align-items-center mb-3">
+                <h4 style="margin: 0;">客观事实库 (FACTS, 置信度 1.0)</h4>
+                <span class="text-muted text-sm" id="facts-count-label">共 0 条事实</span>
+              </div>
+              <p class="text-muted text-xs mb-3">事实来自真实游玩时长、公开徽章、等级与主页配置，具有完全确定性。</p>
+              <div id="facts-list-container" class="knowledge-list">
+                <div class="text-muted text-center py-4">暂无事实记录，请先同步并分析资料。</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Profile Tab 3: Inferences -->
+          <div class="profile-tab-content" id="profile-tab-inferences" style="display: none;">
+            <div class="card p-3">
+              <div class="d-flex justify-content-between align-items-center mb-3">
+                <h4 style="margin: 0;">合理推断库 (INFERENCES, 附证据与置信度)</h4>
+                <span class="text-muted text-sm" id="inferences-count-label">共 0 条推断</span>
+              </div>
+              <p class="text-muted text-xs mb-3">推断由 DeepSeek 综合展柜 DIY、主页字符、游戏偏好得出，保留证据链条，不等于正式事实。</p>
+              <div id="inferences-list-container" class="knowledge-list">
+                <div class="text-muted text-center py-4">暂无推断记录。</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Profile Tab 4: Persona Suggestions -->
+          <div class="profile-tab-content" id="profile-tab-suggestions" style="display: none;">
+            <div class="card p-3">
+              <div class="d-flex justify-content-between align-items-center mb-3">
+                <h4 style="margin: 0;">Persona 人设建议 (待确认候选层)</h4>
+                <span class="text-muted text-sm" id="suggestions-count-label">共 0 条建议</span>
+              </div>
+              <p class="text-muted text-xs mb-3">⚠️ <strong>安全原则</strong>：DeepSeek 绝不自动覆盖正式 Persona。点击【应用】后才会正式生效至 Bot 的日常回复策略中。</p>
+              <div id="suggestions-list-container" class="suggestions-list">
+                <div class="text-muted text-center py-4">暂无人设建议。</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Profile Tab 5: Formal Persona -->
+          <div class="profile-tab-content" id="profile-tab-formal" style="display: none;">
+            <div class="card p-3">
+              <h4>当前正式 Persona (生效中)</h4>
+              <p class="text-muted text-xs mb-3">Bot 在回复复杂问题或闲聊时所遵循的人设特征与话题偏好。</p>
+              <form id="formal-persona-form">
+                <div class="form-row mb-2" style="display: flex; gap: 10px;">
+                  <div class="form-group" style="flex: 1;">
+                    <label>Bot 自称 / 名称:</label>
+                    <input type="text" id="persona-form-name" class="form-control" value="Steam玩家">
+                  </div>
+                  <div class="form-group" style="flex: 1;">
+                    <label>语气基调 (Tone):</label>
+                    <select id="persona-form-tone" class="form-control">
+                      <option value="friendly">friendly (友好温和)</option>
+                      <option value="playful">playful (幽默轻快)</option>
+                      <option value="polite">polite (客气礼貌)</option>
+                      <option value="cool">cool (冷静干练)</option>
+                      <option value="scholarly">scholarly (严谨硬核)</option>
+                    </select>
+                  </div>
+                </div>
+                <div class="form-group mb-2">
+                  <label>性格特征 Traits (逗号分隔):</label>
+                  <input type="text" id="persona-form-traits" class="form-control" placeholder="热爱单机, 乐于助人, 资深老玩家">
+                </div>
+                <div class="form-group mb-2">
+                  <label>喜爱/熟悉的游戏 Favorite Games (逗号分隔):</label>
+                  <input type="text" id="persona-form-games" class="form-control" placeholder="艾尔登法环, 黑神话: 悟空, CS2">
+                </div>
+                <div class="form-group mb-2">
+                  <label>推荐交流话题 Recommended Topics (逗号分隔):</label>
+                  <input type="text" id="persona-form-topics" class="form-control" placeholder="Steam夏促, 好评肉鸽游戏, 成就全收集">
+                </div>
+                <div class="form-group mb-3">
+                  <label>交流风格风格建议 Communication Style (逗号分隔):</label>
+                  <input type="text" id="persona-form-style" class="form-control" placeholder="多用短句, 适当配可爱表情">
+                </div>
+                <button type="submit" class="btn btn-primary" id="btn-save-formal-persona">保存正式 Persona</button>
+              </form>
+            </div>
+          </div>
+
+          <!-- Profile Tab 6: Raw Snapshot -->
+          <div class="profile-tab-content" id="profile-tab-raw" style="display: none;">
+            <div class="card p-3">
+              <h4>Steam 采集原始快照 (JSON)</h4>
+              <pre id="profile-raw-json" class="font-mono text-xs" style="max-height: 480px; overflow-y: auto; background: #0b0f19; padding: 12px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.08);"></pre>
+            </div>
+          </div>
+        </section>
+
+      </main>
+    </div>
+  </div>
+
+  <!-- Task Detail Modal -->
+  <div class="modal-overlay" id="task-modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3 id="modal-task-title">任务详情</h3>
+        <button class="modal-close" id="modal-close-btn">&times;</button>
+      </div>
+      <div class="modal-body" id="modal-task-body">
+        <!-- Injected via JavaScript -->
+      </div>
+    </div>
+  </div>
+
+  <!-- Visual Item Add/Edit Modal -->
+  <div class="modal-overlay" id="visual-modal">
+    <div class="modal-content modal-md">
+      <div class="modal-header">
+        <h3 id="visual-modal-title">添加视觉回复素材</h3>
+        <button class="modal-close" id="visual-modal-close-btn">&times;</button>
+      </div>
+      <div class="modal-body">
+        <form id="visual-item-form">
+          <div class="form-group mb-2">
+            <label>素材 ID (英文唯一标识):</label>
+            <input type="text" id="visual-form-id" class="form-control" placeholder="例: braille_cat_01" required>
+          </div>
+          <div class="form-row mb-2">
+            <div class="form-group col">
+              <label>素材类型 (Type):</label>
+              <select id="visual-form-type" class="form-control">
+                <option value="braille">braille (盲文字符画)</option>
+                <option value="ascii">ascii (ASCII 字符画)</option>
+                <option value="kaomoji">kaomoji (颜文字)</option>
+                <option value="emoji">emoji (Emoji 组合)</option>
+                <option value="steam">steam (Steam 风格)</option>
+                <option value="custom">custom (自定义)</option>
+              </select>
+            </div>
+            <div class="form-group col">
+              <label>抽取权重 (Weight 1~100):</label>
+              <input type="number" id="visual-form-weight" class="form-control" value="15" min="1" max="100">
+            </div>
+          </div>
+          <div class="form-group mb-2">
+            <label>回复内容 (Content):</label>
+            <textarea id="visual-form-content" class="form-control font-mono" rows="6" placeholder="输入完整的字符画或表情回复内容..." required></textarea>
+          </div>
+          <div class="form-row mb-2">
+            <div class="form-group col">
+              <label>标签 Tags (逗号分隔):</label>
+              <input type="text" id="visual-form-tags" class="form-control" placeholder="heart, warm, compact">
+            </div>
+            <div class="form-group col">
+              <label>情绪 Mood (逗号分隔):</label>
+              <input type="text" id="visual-form-mood" class="form-control" placeholder="happy, friendly">
+            </div>
+          </div>
+          <div class="form-group mb-3">
+            <label>备注描述 (Description):</label>
+            <input type="text" id="visual-form-desc" class="form-control" placeholder="简短描述该素材用途">
+          </div>
+          <div class="form-actions text-right">
+            <button type="button" class="btn btn-secondary" id="visual-modal-cancel-btn">取消</button>
+            <button type="submit" class="btn btn-primary" id="visual-modal-submit-btn">保存素材</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Notification Container -->
+  <div class="toast-container" id="toast-container"></div>
+
+  <script src="logPresentation.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
