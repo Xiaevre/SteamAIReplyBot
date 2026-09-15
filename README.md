@@ -31,22 +31,9 @@
 
 机器人内置了开箱即用的极简深色 Web 管理仪表盘（默认监听本地 `http://127.0.0.1:3000` 或随机端口），提供实时状态监控与便捷运维：
 
-```text
-+-----------------------------------------------------------------------------------------------+
-| Steam AI Reply Bot                                                  [状态: 运行中] [会话: 健康]  |
-+-------------------+---------------------------------------------------------------------------+
-| 📊 仪表盘         | [ 今日总回复数: 12 ]    [ 待处理队列: 0 ]    [ 拦截垃圾: 3 ]    [ 0 Token 节约: 9 ] |
-| 📋 任务队列       | ------------------------------------------------------------------------- |
-| 🔑 登录会话       | 🚀 模式切换: ( ) 纯本地 0 Token   (•) AI 智能增强   ( ) 仅监控不发信           |
-| 🎨 视觉素材库     | ⚡ 快捷控制: [ 暂停运行 ]  [ 恢复挂机 ]  [ 紧急熔断 ]  [ 开机自启: 已开启 ]       |
-| 🧠 我的 Steam画像 | ------------------------------------------------------------------------- |
-| ⚙️ 参数配置       | 实时活动日志:                                                             |
-| 📜 实时日志       | [20:15:02] [INFO] DETECTED: 发现来自访客的主页新留言 (ID: 581681...)        |
-| ----------------- | [20:15:03] [INFO] CLASSIFY: 命中本地规则库 [warm_social] -> 匹配免 Token 模板  |
-| 🔗 GitHub/Source  | [20:16:32] [INFO] POST_SEND: 前往对方主页回复成功 (耗时: 620ms, 延迟: 89s)  |
-| 运行时长: 14h 28m | [20:16:33] [INFO] TASK_COMPLETED: 任务标记为 replied，写入 SQLite 幂等账本   |
-+-------------------+---------------------------------------------------------------------------+
-```
+<p align="center">
+  <img src="assets/ui-preview.png" alt="SteamAIReplyBot Web UI 控制面板" width="900">
+</p>
 
 ---
 
@@ -252,8 +239,9 @@ stateDiagram-v2
 
 最终用户解压即可运行，无需预装 Node.js 或编译环境：
 
-1. 前往 [Releases 页面](https://github.com/Xiaevre/SteamAIReplyBot/releases) 下载最新发行包解压；
-2. 复制 `config.example.json` 为 `config.json`，填入您的 Steam 个人主页链接：
+1. 前往 [Releases 页面](https://github.com/Xiaevre/SteamAIReplyBot/releases) 下载 `SteamAIReplyBot-v1.0.0-windows-x64.zip`；
+2. 解压缩至任意目录（建议使用无空格的纯英文路径）；
+3. 复制 `config.example.json` 为 `config.json`，填入您的 Steam 个人主页链接：
    ```json
    {
      "STEAM_PROFILE_URL": "https://steamcommunity.com/id/YOUR_STEAM_ID/",
@@ -262,13 +250,13 @@ stateDiagram-v2
    }
    ```
    > *注：如仅使用纯本地 `LOCAL_ONLY` 模式，`DEEPSEEK_API_KEY` 保持原样或留空即可。*
-3. **首次登录向导**：在当前目录下打开终端（PowerShell 或 CMD）执行：
+4. **首次登录向导**：在解压目录下打开终端（PowerShell 或 CMD）执行：
    ```powershell
    .\SteamAIReplyBot.exe --login
    ```
    在弹出的 Chromium 浏览器窗口中于 Steam 社区官方登录界面输入账号密码并完成令牌确认，登录成功后窗口自动安全关闭；
-4. **启动后台常驻**：直接双击 `SteamAIReplyBot.exe`（默认隐藏控制台黑框）或执行 `start-background.vbs`；
-5. 在浏览器中打开 `http://localhost:3000` 进入 Web 控制面板。
+5. **启动后台常驻**：直接双击 `SteamAIReplyBot.exe`（默认隐藏控制台黑框）或执行 `start-background.vbs`；
+6. 在浏览器中打开 `http://localhost:3000` 进入 Web 控制面板。
 
 ---
 
