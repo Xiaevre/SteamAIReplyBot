@@ -27,6 +27,14 @@ export class BrowserLifecycleError extends Error {
   }
 }
 
+export interface BrowserBootCheckResult {
+  profile: string;
+  existingEdgeProcess: boolean;
+  staleLockDetected: boolean;
+  lockCleanup: boolean;
+  launchAttempt: number;
+}
+
 export class SteamBrowserManager {
   private playwright: any = null;
   private browserContext: any = null;
@@ -64,6 +72,62 @@ export class SteamBrowserManager {
     }
   }
 
+  /**
+   * Checks if an Edge or Chrome process is currently running on the Windows system.
+   * Uses tasklist.exe or PowerShell with safe timeout.
+   */
+  public isEdgeProcessActive(): boolean {
+    if (process.platform !== 'win32') return false;
+    try {
+      const { execSync } = require('child_process');
+      const stdout = execSync('tasklist /FI "IMAGENAME eq msedge.exe" /NH', {
+        encoding: 'utf8',
+        stdio: ['ignore', 'pipe', 'ignore'],
+        timeout: 2000,
+        windowsHide: true,
+        shell: true
+      });
+      return typeof stdout === 'string' && stdout.toLowerCase().includes('msedge.exe');
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * Browser Profile Health Check:
+   * 1. Detects Chromium lock artifacts in data/cookies:
+   *    - SingletonLock, SingletonSocket, SingletonCookie, lockfile
+   * 2. Distinguishes live browser occupancy vs stale post-crash locks.
+   * 3. Safely removes only orphan lock files without touching cookies, Local State, or Steam session.
+   */
+  public checkAndCleanProfileLocks(): { staleLockDetected: boolean; lockCleanup: boolean; activeProcess: boolean } {
+    const lockFiles = ['SingletonLock', 'SingletonSocket', 'SingletonCookie', 'lockfile'];
+    const existingLocks = lockFiles.filter(lockName => fs.existsSync(path.join(this.profileDir, lockName)));
+    if (existingLocks.length === 0) {
+      return { staleLockDetected: false, lockCleanup: false, activeProcess: false };
+    }
+
+    const staleLockDetected = true;
+    let lockCleanup = false;
+    const activeProcess = this.isEdgeProcessActive();
+
+    for (const lockName of existingLocks) {
+      const lockPath = path.join(this.profileDir, lockName);
+      if (!activeProcess) {
+        try {
+          fs.unlinkSync(lockPath);
+          lockCleanup = true;
+        } catch (e: any) {
+          this.logger.warn('PROFILE_LOCK_REMOVE_FAILED', { file: lockName, error: e.message });
+        }
+      } else {
+        this.logger.warn('PROFILE_LOCK_ACTIVE_PROCESS_PRESERVED', { file: lockName, reason: 'Edge process is running' });
+      }
+    }
+
+    return { staleLockDetected, lockCleanup, activeProcess };
+  }
+
   private loadPlaywright(): any {
     if (this.playwright) return this.playwright;
     try {
@@ -77,10 +141,8 @@ export class SteamBrowserManager {
           this.playwright = require(codexPath);
           return this.playwright;
         }
-        throw new Error('Standard playwright package resolution failed');
-      } catch (e: any) {
-        throw new Error('Playwright could not be loaded: ' + e.message);
-      }
+      } catch {}
+      throw new Error('[BROWSER_ERROR] Playwright module not found. Run "npm install playwright".');
     }
   }
 
@@ -180,14 +242,12 @@ export class SteamBrowserManager {
       );
     }
 
-    // 4. AUTO mode: Priority: Release Bundled -> Google Chrome -> Microsoft Edge -> Playwright Bundled
-    // Priority A: Check release/browsers directory if present
+    // 4. AUTO mode:
     const releaseBrowsers = getBrowsersDir();
     if (fs.existsSync(releaseBrowsers)) {
       const candidates = [
         path.join(releaseBrowsers, 'chrome-win', 'chrome.exe'),
-        path.join(releaseBrowsers, 'chrome.exe'),
-        path.join(releaseBrowsers, 'edge-win', 'msedge.exe')
+        path.join(releaseBrowsers, 'chromium', 'chrome.exe')
       ];
       for (const cand of candidates) {
         if (fs.existsSync(cand)) {
@@ -245,9 +305,7 @@ export class SteamBrowserManager {
           return pwExe;
         }
       }
-    } catch {
-      // Ignore
-    }
+    } catch {}
 
     // None found -> Fail explicitly with clear instructions
     throw new Error(
@@ -291,6 +349,7 @@ export class SteamBrowserManager {
       '--disable-background-networking',
       '--disable-sync',
       '--disable-translate',
+      '--disable-features=msEdgeStartupBoost',
       '--metrics-recording-only',
       '--mute-audio',
       '--no-first-run',
@@ -303,17 +362,6 @@ export class SteamBrowserManager {
     } else {
       launchArgs.push('--start-maximized');
     }
-
-    const lockfilePath = path.join(this.profileDir, 'lockfile');
-    const hasLockfile = fs.existsSync(lockfilePath);
-
-    this.logger.info('BROWSER_LAUNCHING', {
-      headless: this.headless,
-      profileDir: this.profileDir,
-      tempDir: this.tempDir,
-      hasLockfile,
-      executablePath: resolvedExe || 'bundled/default'
-    });
 
     const launchOptions: any = {
       headless: this.headless,
@@ -331,44 +379,112 @@ export class SteamBrowserManager {
       launchOptions.channel = this.channel;
     }
 
-    this.browserContext = await pw.chromium.launchPersistentContext(this.profileDir, launchOptions);
-    this.contextId = 'ctx_' + Date.now().toString(36) + '_' + Math.random().toString(36).substring(2, 7);
+    // Playwright launch retry intervals: Attempt 1 -> 5s -> Attempt 2 -> 10s -> Attempt 3 -> 30s
+    const retryDelaysMs = [0, 5000, 10000, 30000];
+    const maxAttempts = 3;
+    let lastError: any = null;
 
-    // Extract Chromium PID if available
-    let pid: number | null = null;
-    try {
-      if (this.browserContext._browserProcess && typeof this.browserContext._browserProcess.pid === 'number') {
-        pid = this.browserContext._browserProcess.pid;
-      } else if (this.browserContext._browser && this.browserContext._browser._process && typeof this.browserContext._browser._process.pid === 'number') {
-        pid = this.browserContext._browser._process.pid;
-      } else if (typeof this.browserContext.browser === 'function' && this.browserContext.browser()?._process?.pid) {
-        pid = this.browserContext.browser()._process.pid;
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      if (attempt > 1) {
+        const delay = retryDelaysMs[attempt - 1] || 5000;
+        this.logger.warn('BROWSER_LAUNCH_RETRY_WAIT', {
+          attempt,
+          maxAttempts,
+          delaySeconds: delay / 1000,
+          previousError: lastError?.message || String(lastError)
+        });
+        await new Promise(resolve => setTimeout(resolve, delay));
       }
-    } catch {
-      // Fallback
-    }
-    this.chromiumPid = pid;
 
-    this.logger.info('BROWSER_LAUNCHED', {
-      profileDir: this.profileDir,
-      contextId: this.contextId,
-      chromiumPid: this.chromiumPid,
-      headless: this.headless
-    });
+      // 1. Health check and safe lock clean
+      const healthCheck = this.checkAndCleanProfileLocks();
 
-    // Route blocking to reduce memory in headless mode only
-    if (this.headless) {
-      await this.browserContext.route('**/*', (route: any) => {
-        const req = route.request();
-        const resType = req.resourceType();
-        if (['image', 'media', 'font', 'stylesheet'].includes(resType) && !req.url().includes('steamcommunity')) {
-          return route.abort();
-        }
-        return route.continue();
+      // 2. Output diagnostic log
+      console.log(`[BROWSER_BOOT_CHECK] profile: ${this.profileDir} existingEdgeProcess: ${healthCheck.activeProcess} staleLockDetected: ${healthCheck.staleLockDetected} lockCleanup: ${healthCheck.lockCleanup} launchAttempt: ${attempt}`);
+      this.logger.info('BROWSER_BOOT_CHECK', {
+        profile: this.profileDir,
+        existingEdgeProcess: healthCheck.activeProcess,
+        staleLockDetected: healthCheck.staleLockDetected,
+        lockCleanup: healthCheck.lockCleanup,
+        launchAttempt: attempt
       });
+
+      this.logger.info('BROWSER_LAUNCHING', {
+        headless: this.headless,
+        profileDir: this.profileDir,
+        tempDir: this.tempDir,
+        launchAttempt: attempt,
+        executablePath: resolvedExe || 'bundled/default'
+      });
+
+      try {
+        this.browserContext = await pw.chromium.launchPersistentContext(this.profileDir, launchOptions);
+        this.contextId = 'ctx_' + Date.now().toString(36) + '_' + Math.random().toString(36).substring(2, 7);
+
+        // Extract Chromium PID if available
+        let pid: number | null = null;
+        try {
+          if (this.browserContext._browserProcess && typeof this.browserContext._browserProcess.pid === 'number') {
+            pid = this.browserContext._browserProcess.pid;
+          } else if (this.browserContext._browser && this.browserContext._browser._process && typeof this.browserContext._browser._process.pid === 'number') {
+            pid = this.browserContext._browser._process.pid;
+          } else if (typeof this.browserContext.browser === 'function' && this.browserContext.browser()?._process?.pid) {
+            pid = this.browserContext.browser()._process.pid;
+          }
+        } catch {}
+        this.chromiumPid = pid;
+
+        this.logger.info('BROWSER_LAUNCHED', {
+          profileDir: this.profileDir,
+          contextId: this.contextId,
+          chromiumPid: this.chromiumPid,
+          headless: this.headless,
+          launchAttempt: attempt
+        });
+
+        // Route blocking to reduce memory in headless mode only
+        if (this.headless) {
+          await this.browserContext.route('**/*', (route: any) => {
+            const req = route.request();
+            const resType = req.resourceType();
+            if (['image', 'media', 'font', 'stylesheet'].includes(resType) && !req.url().includes('steamcommunity')) {
+              return route.abort();
+            }
+            return route.continue();
+          });
+        }
+
+        return this.browserContext;
+      } catch (err: any) {
+        lastError = err;
+        const msg = err.message || String(err);
+        this.logger.error('BROWSER_LAUNCH_FAILED_ATTEMPT', {
+          attempt,
+          maxAttempts,
+          error: msg,
+          profileDir: this.profileDir
+        });
+
+        const isTransientCrash =
+          msg.includes('closed') ||
+          msg.includes('1002') ||
+          msg.includes('Target page, context or browser has been closed') ||
+          msg.includes('Protocol error');
+
+        if (!isTransientCrash && attempt >= maxAttempts) {
+          break;
+        }
+      }
     }
 
-    return this.browserContext;
+    // If all attempts exhausted, throw fatal error with clear reason
+    const finalReason = `Failed to launch browser after ${maxAttempts} attempts. Final Error: ${lastError?.message || String(lastError)}`;
+    this.logger.error('BROWSER_LAUNCH_FATAL', {
+      attempts: maxAttempts,
+      profileDir: this.profileDir,
+      error: finalReason
+    });
+    throw new Error(`[BROWSER_ERROR] ${finalReason}`);
   }
 
   public getProfileDir(): string {

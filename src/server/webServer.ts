@@ -117,8 +117,13 @@ export class WebServer {
         }
       }
 
-      const { status, data } = await this.apiRouter.handleRequest(parsedUrl, req.method || 'GET', body);
-      res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8' });
+      const { status, data, headers, rawBody } = await this.apiRouter.handleRequest(parsedUrl, req.method || 'GET', body);
+      if (rawBody) {
+        res.writeHead(status, headers || { 'Content-Type': 'application/octet-stream' });
+        res.end(rawBody);
+        return;
+      }
+      res.writeHead(status, headers || { 'Content-Type': 'application/json; charset=utf-8' });
       res.end(JSON.stringify(data));
       return;
     }

@@ -1,9 +1,28 @@
+import * as crypto from 'crypto';
 import { SteamBrowserManager } from './browser';
 import { Logger } from '../utils/logger';
 import { SteamSessionManager } from './session';
 import { SteamCommentTransport } from './transport/steamCommentTransport';
 import { SteamSendErrorClassifier } from './transport/steamSendErrorClassifier';
 import { SteamSendVerifier } from './transport/steamSendVerifier';
+import { CommentMonitor } from './commentMonitor';
+
+export function computeReplyFingerprint(arg1: string, arg2: string, arg3?: string): string {
+  let authorSteamId = '';
+  let targetSteamId = '';
+  let text = '';
+  if (arg3 !== undefined) {
+    authorSteamId = arg1 || '';
+    targetSteamId = arg2 || '';
+    text = arg3 || '';
+  } else {
+    targetSteamId = arg1 || '';
+    text = arg2 || '';
+  }
+  const clean = (text || '').trim().replace(/\s+/g, ' ').toLowerCase();
+  const raw = `${authorSteamId}:${targetSteamId}:${clean}`;
+  return crypto.createHash('sha256').update(raw).digest('hex');
+}
 
 export type SendConfirmationStatus =
   | 'CONFIRMED_NOT_SENT'
@@ -26,11 +45,26 @@ export type SendResultStatus =
   | 'FAILED_RETRYABLE'
   | 'UNCERTAIN';
 
+export type SendFailureClass =
+  | 'TRANSPORT_PRE_SEND_FAILURE'
+  | 'TRANSPORT_POST_ATTEMPTED_UNKNOWN'
+  | 'BUSINESS_TARGET_REJECTION'
+  | 'RATE_LIMIT'
+  | 'MODERATION_PENDING'
+  | 'SESSION_INVALID'
+  | 'UNKNOWN';
+
 export interface SendResult {
   status: SendResultStatus;
   confirmationStatus?: SendConfirmationStatus;
   message?: string;
   commentId?: string;
+  failureClass?: SendFailureClass;
+  postAttempted?: boolean;
+  transportPhase?: 'CONNECT' | 'PAGE_PREPARE' | 'POST_DISPATCH' | 'POST_RESPONSE' | 'VERIFY';
+  errorCode?: string;
+  httpStatus?: number;
+  latencyMs?: number;
 }
 
 export interface CommentSenderOptions {
@@ -597,28 +631,49 @@ export class CommentSender {
         }
       }
     } catch (e: any) {
+      const latencyMs = Date.now() - sendStartedAt;
       if (!postAttempted) {
-        this.logger.warn('POST_NOT_ATTEMPTED', {
+        this.logger.warn('SEND_FAILURE_CLASSIFIED', {
+          class: 'TRANSPORT_PRE_SEND_FAILURE',
+          phase: 'CONNECT',
+          errorCode: e.code || 'CONNECT_ERROR',
           targetProfileUrl,
-          phase: 'PRE_POST_NAVIGATION_OR_SETUP',
-          error: e.message
+          postAttempted: false,
+          retryable: true,
+          error: e.message,
+          latencyMs
         });
         return {
           status: 'FAILED_RETRYABLE',
           confirmationStatus: 'CONFIRMED_NOT_SENT',
-          message: `POST_NOT_ATTEMPTED: ${e.message}`
+          message: `POST_NOT_ATTEMPTED: ${e.message}`,
+          failureClass: 'TRANSPORT_PRE_SEND_FAILURE',
+          postAttempted: false,
+          transportPhase: 'CONNECT',
+          errorCode: e.code || 'CONNECT_ERROR',
+          latencyMs
         };
       }
 
-      this.logger.warn('SEND_UNCERTAIN', {
+      this.logger.warn('SEND_FAILURE_CLASSIFIED', {
+        class: 'TRANSPORT_POST_ATTEMPTED_UNKNOWN',
+        phase: 'POST_RESPONSE',
+        errorCode: e.code || 'POST_RESPONSE_ERROR',
         targetProfileUrl,
-        phase: 'POST_TRANSMISSION_OR_VERIFICATION',
-        error: e.message
+        postAttempted: true,
+        retryable: false,
+        error: e.message,
+        latencyMs
       });
       return {
         status: 'UNCERTAIN',
         confirmationStatus: 'SEND_RESULT_UNCERTAIN',
-        message: e.message
+        message: e.message,
+        failureClass: 'TRANSPORT_POST_ATTEMPTED_UNKNOWN',
+        postAttempted: true,
+        transportPhase: 'POST_RESPONSE',
+        errorCode: e.code || 'POST_RESPONSE_ERROR',
+        latencyMs
       };
     } finally {
       await page.close().catch(() => {});
@@ -810,10 +865,22 @@ export class CommentSender {
   public async checkTargetProfileForExistingComment(
     targetProfileUrl: string,
     expectedText: string,
-    parsedCommentId?: string
+    parsedCommentIdOrOptions?: string | {
+      targetSteamId?: string;
+      ourSteamId?: string;
+      startedAt?: string;
+      parsedCommentId?: string;
+      replyFingerprint?: string;
+      postAttemptedAt?: number;
+    }
   ): Promise<'FOUND' | 'NOT_FOUND' | 'MODERATION_PENDING' | 'RESTRICTED' | 'UNCERTAIN'> {
-    const page = await this.browserManager.openEphemeralPage();
+    const opts = typeof parsedCommentIdOrOptions === 'object' && parsedCommentIdOrOptions !== null
+      ? parsedCommentIdOrOptions
+      : { parsedCommentId: parsedCommentIdOrOptions };
+
+    let page: any = null;
     try {
+      page = await this.browserManager.openEphemeralPage();
       const freshUrl = targetProfileUrl.includes('?')
         ? `${targetProfileUrl}&_t=${Date.now()}`
         : `${targetProfileUrl}?_t=${Date.now()}`;
@@ -831,19 +898,89 @@ export class CommentSender {
 
       await page.waitForSelector('.commentthread_comments, .profile_comment_area', { timeout: 10000 }).catch(() => {});
 
-      const res = await this.verifier.verifyCommentInPage(page, {
+      const postAttemptedAtMs = opts.postAttemptedAt || (opts.startedAt ? new Date(opts.startedAt).getTime() : undefined);
+
+      // Page 1 verification
+      let res = await this.verifier.verifyCommentInPage(page, {
         expectedText,
-        parsedCommentId,
-        botSteamId: this.mySteamId,
-        botProfileUrl: this.myProfileUrl
+        parsedCommentId: opts.parsedCommentId,
+        botSteamId: opts.ourSteamId || this.mySteamId,
+        botProfileUrl: this.myProfileUrl,
+        postAttemptedAt: postAttemptedAtMs
       });
+
+      if (res === 'FOUND' || res === 'MODERATION_PENDING') {
+        return res;
+      }
+
+      // Unified Catch-Up Pagination: Reuse CommentMonitor.triggerNextPage
+      // Search backwards through comment thread within target time window up to max safety cap (10 pages)
+      if (res === 'NOT_FOUND' || res === 'VERIFY_FAILED') {
+        const MAX_VERIFY_PAGES = 10;
+        let verifyPage = 1;
+
+        while (verifyPage < MAX_VERIFY_PAGES) {
+          const paged = await CommentMonitor.triggerNextPage(page);
+          if (!paged) {
+            // No more pages / disabled next button; reached natural end of thread
+            break;
+          }
+          verifyPage++;
+
+          const deeperRes = await this.verifier.verifyCommentInPage(page, {
+            expectedText,
+            parsedCommentId: opts.parsedCommentId,
+            botSteamId: opts.ourSteamId || this.mySteamId,
+            botProfileUrl: this.myProfileUrl,
+            postAttemptedAt: postAttemptedAtMs
+          });
+
+          if (deeperRes === 'FOUND' || deeperRes === 'MODERATION_PENDING') {
+            return deeperRes;
+          }
+
+          if (deeperRes === 'VERIFY_FAILED') {
+            // Page verification failed or had network/DOM glitch: strictly return UNCERTAIN!
+            return 'UNCERTAIN';
+          }
+
+          // Check if comments on this page have moved past the postAttemptedAt time window
+          if (postAttemptedAtMs) {
+            const minTimestampSec = Math.floor(postAttemptedAtMs / 1000) - 120;
+            const commentsOnPage = await page.$$eval(
+              '.commentthread_comment, [data-timestamp]',
+              (elements: any[]) => {
+                const ts: number[] = [];
+                for (const el of elements) {
+                  const tEl = el.querySelector ? el.querySelector('[data-timestamp]') : null;
+                  const raw = (tEl ? tEl.getAttribute('data-timestamp') : null) || (el.getAttribute ? el.getAttribute('data-timestamp') : null);
+                  if (raw) {
+                    const parsed = parseInt(raw, 10);
+                    if (!isNaN(parsed)) ts.push(parsed);
+                  }
+                }
+                return ts;
+              }
+            ).catch(() => []);
+
+            if (commentsOnPage.length > 0) {
+              const allOlder = commentsOnPage.every((ts: number) => ts < minTimestampSec);
+              if (allOlder) {
+                // Reached comments older than send window; safe to stop searching
+                break;
+              }
+            }
+          }
+        }
+      }
+
       if (res === 'VERIFY_FAILED') return 'UNCERTAIN';
       return res;
     } catch (e: any) {
-      this.logger.warn('CHECK_EXISTING_COMMENT_ERROR', e.message);
+      this.logger.warn('CHECK_EXISTING_COMMENT_ERROR', { error: e.message, isNetworkError: true });
       return 'UNCERTAIN';
     } finally {
-      await page.close().catch(() => {});
+      if (page) await page.close().catch(() => {});
     }
   }
 

@@ -45,7 +45,10 @@ async function run() {
     { name: 'Graceful Stop & Resume Lifecycle Architecture', fn: require('./unit/stopResumeBot.test').runStopResumeBotTests },
     { name: 'Windows Background Execution & Autostart Architecture', fn: require('./unit/windowsBackgroundAndAutostart.test').runWindowsBackgroundAndAutostartTests },
     { name: 'Startup Recovery & Interactive Login Race Safety', fn: require('./unit/startupRecoveryRace.test').runStartupRecoveryRaceTests },
-    { name: 'Today Stats & Total Replies Accounting', fn: require('./unit/todayStats.test').runTodayStatsTests }
+    { name: 'Today Stats & Total Replies Accounting', fn: require('./unit/todayStats.test').runTodayStatsTests },
+    { name: 'Circuit Breaker & Queue Decoupling Acceptance', fn: require('./unit/circuitBreakerQueueDecoupling.test').runCircuitBreakerQueueDecouplingTests },
+    { name: 'Browser Profile Recovery & Lifecycle Stability', fn: require('./unit/browserLifecycleRecovery.test').runBrowserLifecycleRecoveryTests },
+    { name: 'Poll Decoupling, Incremental Catch-up & Diagnostics', fn: require('./unit/pollDecouplingAndCatchup.test').runPollDecouplingAndCatchupTests }
   ];
 
   const failedList = [];

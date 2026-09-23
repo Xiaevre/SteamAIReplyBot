@@ -40,6 +40,9 @@ import {
   ActionType,
   SkipReasonType
 } from '../utils/commentDiagnostics';
+import { MonitorStateRepository } from '../db/repositories/monitorState';
+import { computeReplyFingerprint } from '../steam/commentSender';
+import { TransportCircuitBreaker } from '../steam/transport/transportCircuitBreaker';
 
 export type SessionState = 'waiting_for_login' | 'authenticated' | 'resumed';
 
@@ -65,14 +68,21 @@ export class TaskScheduler {
   public commentMonitor: CommentMonitor;
   public commentSender: CommentSender;
   public circuitBreaker: CommentCircuitBreaker;
+  public transportCircuitBreaker: TransportCircuitBreaker;
   public healthMonitor: HealthMonitor;
   public visualReplyLibrary: VisualReplyLibrary;
   public knowledgeStore: KnowledgeStore;
   public profileAnalysisManager: ProfileAnalysisManager;
+  public monitorStateRepo: MonitorStateRepository;
   public logger: Logger;
   public sessionState: SessionState = 'waiting_for_login';
   public lastPolledAt: string | null = null;
   public nextPollExpectedAt: string | null = null;
+  public lastPollDurationMs: number = 0;
+  public lastCatchupCommentsCount: number = 0;
+  public lastPollLagDetected: boolean = false;
+  public lastPollLagSeconds: number = 0;
+  private pendingImmediatePoll: boolean = false;
   public lastSendResult: { target: string; status: string; timestamp: string; commentId?: string; message?: string } | null = null;
   public botMode: BotMode = 'AI_ENHANCED';
   public lifecycleState: BotLifecycleState = 'STOPPED';
@@ -97,6 +107,7 @@ export class TaskScheduler {
     this.holidayRepo = new HolidayRepository(this.db);
     this.nicknameMemoryRepo = new NicknameMemoryRepository(this.db);
     this.nicknameResolver = new NicknameResolver(this.nicknameMemoryRepo);
+    this.monitorStateRepo = new MonitorStateRepository(this.db);
 
     this.templateEngine = new TemplateEngine();
     this.classifier = new LocalClassifier(this.templateEngine);
@@ -124,6 +135,7 @@ export class TaskScheduler {
     this.commentMonitor = new CommentMonitor(this.browserManager, config.STEAM_PROFILE_URL, this.logger);
     this.commentSender = new CommentSender(this.browserManager, config.STEAM_PROFILE_URL, this.logger);
     this.circuitBreaker = new CommentCircuitBreaker(this.logger);
+    this.transportCircuitBreaker = new TransportCircuitBreaker(this.logger);
     this.healthMonitor = new HealthMonitor(this.logger, config.MEMORY_WARNING_MB, config.MEMORY_CRITICAL_MB);
 
     const curator = new DeepSeekProfileCurator(this.deepseek, this.logger);
@@ -333,10 +345,23 @@ export class TaskScheduler {
     return loginResult;
   }
 
-  public async start(): Promise<void> {
+  public async start(options?: { isBackground?: boolean }): Promise<void> {
     this.setLifecycleState('STARTING');
     this.isRunning = true;
     this.logger.info('SCHEDULER_STARTED', { dryRun: this.config.DRY_RUN, headless: this.config.HEADLESS, mode: this.botMode });
+
+    // Windows Autostart / Background boot settling delay
+    // Allows Windows Desktop DWM, network, DPAPI, Defender scan, and Edge startup boost to settle
+    const isBackgroundBoot = Boolean(options?.isBackground || process.argv.includes('--background') || process.env.STEAM_BOT_AUTOSTART === '1');
+    if (isBackgroundBoot) {
+      this.logger.info('BOOT_SETTLING_DELAY_START', {
+        reason: 'Waiting for Windows desktop, network, and background browser processes to stabilize',
+        delaySeconds: 30
+      });
+      console.log('[SteamAIReplyBot] ⏳ 开机/后台自启环境沉降等待中 (30秒)... 等待 Windows 桌面与网络初始化就绪');
+      await new Promise(resolve => setTimeout(resolve, 30000));
+      this.logger.info('BOOT_SETTLING_DELAY_COMPLETED', { delaySeconds: 30 });
+    }
 
     // Step 0: Authenticated Session Health Check on startup
     let authCheck: any = { valid: false, reason: 'INITIALIZING' };
@@ -518,8 +543,31 @@ export class TaskScheduler {
   private scheduleNextPoll(overrideDelayMs?: number): void {
     if (!this.isRunning) return;
 
+    // Detect poll lag if previous expected poll time was significantly exceeded (> 60s)
+    if (this.nextPollExpectedAt) {
+      const expectedTime = new Date(this.nextPollExpectedAt).getTime();
+      const now = Date.now();
+      if (now > expectedTime + 60000) {
+        const lagSec = Math.round((now - expectedTime) / 1000);
+        this.lastPollLagDetected = true;
+        this.lastPollLagSeconds = lagSec;
+        this.logger.warn('POLL_LAG_DETECTED', {
+          expectedAt: this.nextPollExpectedAt,
+          actualAt: new Date(now).toISOString(),
+          lagSeconds: lagSec
+        });
+      } else {
+        this.lastPollLagDetected = false;
+        this.lastPollLagSeconds = 0;
+      }
+    }
+
     let delayMs = overrideDelayMs;
-    if (delayMs === undefined) {
+    if (this.pendingImmediatePoll) {
+      this.pendingImmediatePoll = false;
+      delayMs = 50;
+      this.logger.info('EXECUTING_QUEUED_IMMEDIATE_POLL');
+    } else if (delayMs === undefined) {
       const minSec = this.config.CHECK_INTERVAL_MIN_SECONDS;
       const maxSec = this.config.CHECK_INTERVAL_MAX_SECONDS;
       const randomSec = Math.floor(Math.random() * (maxSec - minSec + 1) + minSec);
@@ -531,11 +579,13 @@ export class TaskScheduler {
 
     this.timerHandle = setTimeout(async () => {
       this.nextPollExpectedAt = null;
+      const cycleStart = Date.now();
       try {
         await this.runCycle();
       } catch (err: any) {
         this.logger.error('CYCLE_UNHANDLED_ERROR', err.message);
       } finally {
+        this.lastPollDurationMs = Date.now() - cycleStart;
         this.scheduleNextPoll();
       }
     }, delayMs);
@@ -546,7 +596,8 @@ export class TaskScheduler {
     this.logger.info('IMMEDIATE_POLL_REQUESTED');
 
     if (this.isCycleRunning) {
-      this.logger.info('IMMEDIATE_POLL_DEFERRED', 'Cycle already in progress, will schedule next poll promptly');
+      this.pendingImmediatePoll = true;
+      this.logger.info('IMMEDIATE_POLL_QUEUED', 'Cycle already in progress, marked pending immediate poll for when current cycle finishes');
       return;
     }
 
@@ -1336,8 +1387,14 @@ export class TaskScheduler {
   }
 
   private async scanCommentsStep(): Promise<void> {
-    const discovered = await this.commentMonitor.fetchComments();
+    const lastSeenCommentId = this.monitorStateRepo.getLastSeenCommentId();
+    const discovered = await this.commentMonitor.fetchComments(lastSeenCommentId || undefined);
     this.lastPolledAt = new Date().toISOString();
+    this.lastCatchupCommentsCount = this.commentMonitor.lastCatchupStats.fetchedCount;
+
+    if (discovered.length > 0 && discovered[0]?.commentId) {
+      this.monitorStateRepo.setLastSeenCommentId(discovered[0].commentId);
+    }
 
     // Monitor session state discovery
     const isMonitorSessionValid = this.commentMonitor.isSessionValid();
@@ -1506,7 +1563,18 @@ export class TaskScheduler {
       return;
     }
 
-    const isHalfOpenProbe = this.circuitBreaker.isHalfOpen();
+    // Transport Circuit Breaker Check
+    if (this.transportCircuitBreaker.isOpen()) {
+      this.logger.info('TRANSPORT_CIRCUIT_COOLDOWN', {
+        state: 'OPEN',
+        cooldownUntil: new Date(this.transportCircuitBreaker.getCooldownUntil()).toISOString(),
+        remainingSeconds: Math.max(0, Math.round((this.transportCircuitBreaker.getCooldownUntil() - Date.now()) / 1000)),
+        reason: 'TRANSPORT_CIRCUIT_BREAKER_OPEN_HALTING_QUEUE'
+      });
+      return;
+    }
+
+    let isHalfOpenProbe = this.circuitBreaker.isHalfOpen();
     if (isHalfOpenProbe) {
       // Step VI: In HALF_OPEN, first check session health
       this.logger.info('COMMENT_CIRCUIT_HALF_OPEN', {
@@ -1521,6 +1589,15 @@ export class TaskScheduler {
     }
 
     const readyTasks = this.delayQueue.getReadyTasks();
+
+    // In HALF_OPEN probe mode, explicitly prioritize attempt_count === 0 fresh tasks for probing
+    if (isHalfOpenProbe && readyTasks.length > 0) {
+      const freshIndex = readyTasks.findIndex(t => (t.attempt_count ?? 0) === 0);
+      if (freshIndex > 0) {
+        const [freshTask] = readyTasks.splice(freshIndex, 1);
+        readyTasks.unshift(freshTask);
+      }
+    }
 
     for (const task of readyTasks) {
       if (!this.isRunning || this.config.EMERGENCY_STOP) break;
@@ -1635,7 +1712,8 @@ export class TaskScheduler {
       }
 
       // LIVE SEND
-      this.replyTasksRepo.updateStatus(task.task_id, 'sending', { started_at: new Date().toISOString() });
+      const fingerprint = task.reply_fingerprint || computeReplyFingerprint(task.target_steam_id || '', task.reply_text);
+      this.replyTasksRepo.updateStatus(task.task_id, 'sending', { started_at: new Date().toISOString(), reply_fingerprint: fingerprint });
       this.commentsRepo.updateStatus(task.steam_comment_id, 'sending');
 
       const sendResult = await this.commentSender.sendReply(
@@ -1652,9 +1730,44 @@ export class TaskScheduler {
         message: sendResult.message
       };
 
+      // Classification: Transport Pre-Send Failure (safe jittered retry, separate from business attempts)
+      if (sendResult.failureClass === 'TRANSPORT_PRE_SEND_FAILURE') {
+        this.transportCircuitBreaker.recordFailure();
+        const currentRetry = task.transport_retry_count || 0;
+        if (currentRetry < 3) {
+          const delayMs = (30 + Math.random() * 60) * 1000; // 30~90s + jitter
+          const nextScheduledAt = new Date(Date.now() + delayMs).toISOString();
+          this.replyTasksRepo.updateStatus(task.task_id, 'waiting', {
+            transport_retry_count: currentRetry + 1,
+            reply_fingerprint: fingerprint,
+            scheduled_at: nextScheduledAt
+          });
+          this.commentsRepo.updateStatus(task.steam_comment_id, 'waiting', {
+            error_message: `Pre-send transport error: ${sendResult.message}`
+          });
+          this.logger.warn('TRANSPORT_PRE_SEND_RETRY_SCHEDULED', {
+            taskId: task.task_id,
+            targetSteamId: task.target_steam_id,
+            transportRetryCount: currentRetry + 1,
+            scheduledAt: nextScheduledAt,
+            delaySeconds: Math.round(delayMs / 1000),
+            reason: sendResult.message
+          });
+        } else {
+          this.replyTasksRepo.updateStatus(task.task_id, 'failed', {
+            transport_retry_count: currentRetry + 1
+          });
+          this.commentsRepo.updateStatus(task.steam_comment_id, 'failed', {
+            error_message: `TRANSPORT_PRE_SEND_FAILURE: Exceeded 3 transport retries (${sendResult.message})`
+          });
+        }
+        continue;
+      }
+
       if (sendResult.status === 'SUCCESS' || sendResult.status === 'ALREADY_SENT') {
+        this.transportCircuitBreaker.recordSuccess();
         const completedAt = new Date().toISOString();
-        this.replyTasksRepo.updateStatus(task.task_id, 'replied', { completed_at: completedAt });
+        this.replyTasksRepo.updateStatus(task.task_id, 'replied', { completed_at: completedAt, reply_fingerprint: fingerprint });
         this.commentsRepo.updateStatus(task.steam_comment_id, 'replied', { replied_at: completedAt });
         this.interactionRepo.recordInteraction({
           steamId: task.target_steam_id,
@@ -1674,7 +1787,7 @@ export class TaskScheduler {
           message: sendResult.message,
           reason: 'MODERATION_PENDING_NEVER_RETRY'
         });
-        this.replyTasksRepo.updateStatus(task.task_id, 'submitted_moderation_pending');
+        this.replyTasksRepo.updateStatus(task.task_id, 'submitted_moderation_pending', { reply_fingerprint: fingerprint });
         this.commentsRepo.updateStatus(task.steam_comment_id, 'submitted_moderation_pending', {
           error_message: 'Reply submitted but awaiting Steam automated content check'
         });
@@ -1696,9 +1809,11 @@ export class TaskScheduler {
           error_message: sendResult.message || 'TARGET_REJECTION_CONFIRMED: Target profile comments restricted'
         });
       } else if (
+        sendResult.failureClass === 'TRANSPORT_POST_ATTEMPTED_UNKNOWN' ||
         sendResult.confirmationStatus === 'SEND_RESULT_UNCERTAIN' ||
         sendResult.status === 'UNCERTAIN'
       ) {
+        this.transportCircuitBreaker.recordFailure();
         this.logger.warn('REPLY_STATE_UNCERTAIN', {
           taskId: task.task_id,
           targetProfileUrl: task.target_profile_url,
@@ -1707,7 +1822,12 @@ export class TaskScheduler {
           message: sendResult.message,
           reason: 'SEND_RESULT_UNCERTAIN_NEVER_RETRY'
         });
-        this.replyTasksRepo.updateStatus(task.task_id, 'uncertain_send_state');
+        const now = new Date().toISOString();
+        this.replyTasksRepo.updateStatus(task.task_id, 'uncertain_send_state', {
+          reply_fingerprint: fingerprint,
+          uncertain_verify_count: 0,
+          uncertain_last_checked_at: now
+        });
         this.commentsRepo.updateStatus(task.steam_comment_id, 'uncertain_send_state', {
           error_message: 'Send state uncertain; auto-resend blocked for safety'
         });
@@ -1798,8 +1918,14 @@ export class TaskScheduler {
       }
 
       if (isHalfOpenProbe) {
-        // In HALF_OPEN probe mode, process only one task per dispatch cycle
-        break;
+        if (this.circuitBreaker.isClosed()) {
+          // Probe succeeded! Circuit is now CLOSED and Steam send path is verified healthy.
+          // Reset probe flag so remaining ready tasks can proceed in this cycle (subject to rate limit).
+          isHalfOpenProbe = false;
+        } else {
+          // Probe did not close circuit (failed or deferred). Stop dispatch loop for this cycle.
+          break;
+        }
       }
     }
   }
@@ -1929,10 +2055,12 @@ export class TaskScheduler {
       return;
     }
 
-    const uncertainTasks = this.replyTasksRepo.getUncertainTasks();
+    const totalUncertain = this.replyTasksRepo.getUncertainTasksCount();
+    // Bounded budget: batch limit 3 per cycle directly in SQL to prevent poll starvation
+    const uncertainTasks = this.replyTasksRepo.getUncertainTasks(3);
     if (uncertainTasks.length === 0) return;
 
-    this.logger.info('UNCERTAIN_RECOVERY_STARTED', { count: uncertainTasks.length });
+    this.logger.info('UNCERTAIN_RECOVERY_STARTED', { count: uncertainTasks.length, totalPending: totalUncertain });
 
     for (const task of uncertainTasks) {
       if (this.isBrowserBusyForRecovery()) {
@@ -1943,17 +2071,43 @@ export class TaskScheduler {
         break;
       }
 
+      // Task-level cooldown: at least 3 minutes (180s) between verification checks
+      if (task.uncertain_last_checked_at) {
+        const lastChecked = new Date(task.uncertain_last_checked_at).getTime();
+        const elapsed = Date.now() - lastChecked;
+        if (elapsed < 180 * 1000) {
+          this.logger.info('UNCERTAIN_TASK_IN_COOLDOWN', {
+            taskId: task.task_id,
+            remainingSeconds: Math.round((180 * 1000 - elapsed) / 1000)
+          });
+          continue;
+        }
+      }
+
+      const now = new Date().toISOString();
+      const cachedSession = (this.sessionManager && typeof this.sessionManager.getCachedSessionInfo === 'function')
+        ? this.sessionManager.getCachedSessionInfo()
+        : null;
+      const ourSteamId = cachedSession?.steamId64;
+
       this.logger.info('UNCERTAIN_RECOVERY_CHECKING', {
         taskId: task.task_id,
-        targetProfileUrl: task.target_profile_url
+        targetProfileUrl: task.target_profile_url,
+        verifyCount: task.uncertain_verify_count || 0
       });
 
-      // 1. Check target profile to see if reply is already posted or under moderation
+      // 1. Multi-factor deep check target profile (up to 2 additional pages)
       let check: string;
       try {
         check = await this.commentSender.checkTargetProfileForExistingComment(
           task.target_profile_url,
-          task.reply_text
+          task.reply_text,
+          {
+            maxExtraPages: 2,
+            ourSteamId,
+            targetSteamId: task.target_steam_id,
+            expectedFingerprint: task.reply_fingerprint
+          }
         );
       } catch (checkErr: any) {
         const isLifecycle = checkErr?.isLifecycleError ||
@@ -1968,6 +2122,14 @@ export class TaskScheduler {
           error: checkErr.message
         });
 
+        // On verification network failure / timeout: strictly update last_checked_at and stay in DELAYED_RECHECK
+        // But if browser lifecycle error (browser closed/busy), do not update last_checked_at so it resumes immediately once browser is active
+        if (!isLifecycle) {
+          this.replyTasksRepo.updateStatus(task.task_id, 'uncertain_send_state', {
+            uncertain_last_checked_at: now
+          });
+        }
+
         if (isLifecycle || this.isBrowserBusyForRecovery()) {
           break; // Defer remaining uncertain tasks until browser/session is ready
         }
@@ -1978,7 +2140,7 @@ export class TaskScheduler {
         // Confirmed existing: update to replied and DO NOT resend
         this.logger.info('UNCERTAIN_RECOVERY_RESOLVED_ALREADY_REPLIED', { taskId: task.task_id });
         const completedAt = new Date().toISOString();
-        this.replyTasksRepo.updateStatus(task.task_id, 'replied', { completed_at: completedAt });
+        this.replyTasksRepo.updateStatus(task.task_id, 'replied', { completed_at: completedAt, uncertain_last_checked_at: now });
         this.commentsRepo.updateStatus(task.steam_comment_id, 'replied', { replied_at: completedAt });
         this.interactionRepo.recordInteraction({
           steamId: task.target_steam_id,
@@ -1988,18 +2150,76 @@ export class TaskScheduler {
       } else if (check === 'MODERATION_PENDING') {
         // Confirmed under moderation: update to submitted_moderation_pending and ABSOLUTELY DO NOT resend
         this.logger.info('UNCERTAIN_RECOVERY_RESOLVED_MODERATION_PENDING', { taskId: task.task_id });
-        this.replyTasksRepo.updateStatus(task.task_id, 'submitted_moderation_pending');
+        this.replyTasksRepo.updateStatus(task.task_id, 'submitted_moderation_pending', { uncertain_last_checked_at: now });
         this.commentsRepo.updateStatus(task.steam_comment_id, 'submitted_moderation_pending', {
           error_message: 'Reply confirmed in Steam automated content check moderation'
         });
-      } else {
-        // NOT_FOUND or UNCERTAIN:
-        // ABSOLUTELY DO NOT AUTO-RESEND! The original POST succeeded on transport or was sent.
-        // A temporary NOT_FOUND does not mean not sent. Maintain uncertain_send_state to guarantee zero duplicate send!
-        this.logger.warn('UNCERTAIN_RECOVERY_MAINTAINED', {
+      } else if (check === 'UNCERTAIN') {
+        // Verification result uncertain: NEVER treat as CONFIRMED_NOT_SENT, NEVER trigger resend!
+        this.logger.warn('UNCERTAIN_VERIFICATION_UNCERTAIN_MAINTAINED', {
           taskId: task.task_id,
-          reason: 'Auto-resend strictly forbidden for uncertain state to prevent duplicate comment'
+          reason: 'Verification network check uncertain. Delayed recheck maintained; resend strictly blocked.'
         });
+        this.replyTasksRepo.updateStatus(task.task_id, 'uncertain_send_state', {
+          uncertain_last_checked_at: now
+        });
+      } else {
+        // check === 'NOT_FOUND': Clean spaced inspection
+        const currentVerifyCount = task.uncertain_verify_count || 0;
+        const newVerifyCount = currentVerifyCount + 1;
+
+        if (newVerifyCount < 2) {
+          // Phase 1 complete: 1st clean inspection passed. Defer to 2nd spaced inspection in >= 3 min before SAFE_TO_RESEND.
+          this.logger.info('UNCERTAIN_FIRST_VERIFICATION_PASSED', {
+            taskId: task.task_id,
+            verifyCount: newVerifyCount,
+            reason: '1st clean inspection passed (NOT_FOUND). Deferring to 2nd spaced inspection in >= 3 min before considering SAFE_TO_RESEND.'
+          });
+          this.replyTasksRepo.updateStatus(task.task_id, 'uncertain_send_state', {
+            uncertain_verify_count: newVerifyCount,
+            uncertain_last_checked_at: now
+          });
+        } else {
+          // Phase 2 complete: Two clean spaced inspections confirmed NOT_FOUND!
+          const currentResendCount = task.uncertain_resend_count || 0;
+
+          if (currentResendCount === 0) {
+            // High confidence dual-verification consistent: SAFE_TO_RESEND (Max 1 safe resend allowed)
+            this.logger.warn('SAFE_TO_RESEND_VERIFIED', {
+              taskId: task.task_id,
+              targetSteamId: task.target_steam_id,
+              verifyCount: newVerifyCount,
+              reason: 'High confidence dual-verification consistent: reply absent on profile. Enqueuing for exactly 1 safe resend.'
+            });
+
+            this.replyTasksRepo.updateStatus(task.task_id, 'waiting', {
+              uncertain_verify_count: newVerifyCount,
+              uncertain_resend_count: 1,
+              uncertain_last_checked_at: now,
+              attempt_count: task.attempt_count + 1,
+              scheduled_at: now
+            });
+            this.commentsRepo.updateStatus(task.steam_comment_id, 'waiting', {
+              error_message: 'High confidence dual-verification passed; re-enqueued for 1 safe resend'
+            });
+          } else {
+            // Already resent once! Strictly forbid 3rd POST! Permanent terminal state.
+            this.logger.error('UNCERTAIN_FINAL_FAILURE', {
+              taskId: task.task_id,
+              targetSteamId: task.target_steam_id,
+              resendCount: currentResendCount,
+              reason: 'Maximum 1 resend limit reached for UNCERTAIN task. Permanent stop to prevent duplicate comments.'
+            });
+
+            this.replyTasksRepo.updateStatus(task.task_id, 'failed', {
+              uncertain_verify_count: newVerifyCount,
+              uncertain_last_checked_at: now
+            });
+            this.commentsRepo.updateStatus(task.steam_comment_id, 'failed', {
+              error_message: 'UNCERTAIN_MAX_RESEND_REACHED: Strictly terminated after 1 resend attempt'
+            });
+          }
+        }
       }
     }
   }
@@ -2013,10 +2233,12 @@ export class TaskScheduler {
       return;
     }
 
-    const modTasks = this.replyTasksRepo.getModerationPendingTasks();
+    const totalMod = this.replyTasksRepo.getModerationPendingTasksCount();
+    // Bounded budget: batch limit 3 per cycle directly in SQL to prevent poll starvation
+    const modTasks = this.replyTasksRepo.getModerationPendingTasks(3);
     if (modTasks.length === 0) return;
 
-    this.logger.info('MODERATION_RECOVERY_STARTED', { count: modTasks.length });
+    this.logger.info('MODERATION_RECOVERY_STARTED', { count: modTasks.length, totalPending: totalMod });
 
     for (const task of modTasks) {
       if (this.isBrowserBusyForRecovery()) {
@@ -2027,6 +2249,25 @@ export class TaskScheduler {
         break;
       }
 
+      // Task-level cooldown: 10 minutes between checks
+      if (task.uncertain_last_checked_at) {
+        const lastChecked = new Date(task.uncertain_last_checked_at).getTime();
+        const elapsed = Date.now() - lastChecked;
+        if (elapsed < 10 * 60 * 1000) {
+          this.logger.info('MODERATION_TASK_IN_COOLDOWN', {
+            taskId: task.task_id,
+            remainingSeconds: Math.round((10 * 60 * 1000 - elapsed) / 1000)
+          });
+          continue;
+        }
+      }
+
+      const now = new Date().toISOString();
+      const cachedSession = (this.sessionManager && typeof this.sessionManager.getCachedSessionInfo === 'function')
+        ? this.sessionManager.getCachedSessionInfo()
+        : null;
+      const ourSteamId = cachedSession?.steamId64;
+
       this.logger.info('MODERATION_RECOVERY_CHECKING', {
         taskId: task.task_id,
         targetProfileUrl: task.target_profile_url
@@ -2036,7 +2277,13 @@ export class TaskScheduler {
       try {
         check = await this.commentSender.checkTargetProfileForExistingComment(
           task.target_profile_url,
-          task.reply_text
+          task.reply_text,
+          {
+            maxExtraPages: 2,
+            ourSteamId,
+            targetSteamId: task.target_steam_id,
+            expectedFingerprint: task.reply_fingerprint
+          }
         );
       } catch (checkErr: any) {
         const isLifecycle = checkErr?.isLifecycleError ||
@@ -2051,6 +2298,12 @@ export class TaskScheduler {
           error: checkErr.message
         });
 
+        if (!isLifecycle) {
+          this.replyTasksRepo.updateStatus(task.task_id, 'submitted_moderation_pending', {
+            uncertain_last_checked_at: now
+          });
+        }
+
         if (isLifecycle || this.isBrowserBusyForRecovery()) {
           break; // Defer remaining moderation recovery tasks until browser/session is ready
         }
@@ -2064,7 +2317,7 @@ export class TaskScheduler {
           reason: 'Moderation pending resolved and reply verified on target profile'
         });
         const completedAt = new Date().toISOString();
-        this.replyTasksRepo.updateStatus(task.task_id, 'replied', { completed_at: completedAt });
+        this.replyTasksRepo.updateStatus(task.task_id, 'replied', { completed_at: completedAt, uncertain_last_checked_at: now });
         this.commentsRepo.updateStatus(task.steam_comment_id, 'replied', { replied_at: completedAt });
         this.interactionRepo.recordInteraction({
           steamId: task.target_steam_id,
@@ -2077,12 +2330,18 @@ export class TaskScheduler {
           targetProfileUrl: task.target_profile_url,
           status: 'STILL_PENDING'
         });
+        this.replyTasksRepo.updateStatus(task.task_id, 'submitted_moderation_pending', {
+          uncertain_last_checked_at: now
+        });
       } else {
         // Still pending or under review: maintain submitted_moderation_pending!
         // ABSOLUTELY DO NOT RESEND! Steam comment was already accepted and is in review.
         this.logger.info('MODERATION_RECOVERY_MAINTAINED', {
           taskId: task.task_id,
           status: 'STILL_IN_MODERATION'
+        });
+        this.replyTasksRepo.updateStatus(task.task_id, 'submitted_moderation_pending', {
+          uncertain_last_checked_at: now
         });
       }
     }
@@ -2113,6 +2372,20 @@ export class TaskScheduler {
       uptimeStr: Banner.formatUptime(uptimeSec),
       status: this.config.EMERGENCY_STOP ? 'EMERGENCY_STOPPED' : this.config.BOT_ENABLED ? 'RUNNING' : 'PAUSED'
     });
+
+    // Structured Queue Diagnostics logging for runtime observability
+    const oldestPending = this.replyTasksRepo.getOldestPendingTask();
+    const circuitState = this.circuitBreaker.getState();
+    const farFutureIso = new Date(Date.now() + 86400000 * 365).toISOString();
+    const pendingCount = this.replyTasksRepo.getPendingScheduledTasks(farFutureIso).length;
+
+    this.logger.info('QUEUE_RUN_DIAGNOSTICS', {
+      circuitBreakerState: circuitState,
+      pendingTasksCount: pendingCount,
+      oldestPendingTaskAt: oldestPending ? oldestPending.scheduled_at : null,
+      lastSendAttemptAt: this.lastSendResult ? this.lastSendResult.timestamp : null,
+      lastSendStatus: this.lastSendResult ? this.lastSendResult.status : null
+    });
   }
 
   public getStatusSummary() {
@@ -2122,11 +2395,15 @@ export class TaskScheduler {
     const todayStats = this.commentsRepo.getStatsToday(holidayReplies);
     const farFutureIso = new Date(Date.now() + 86400000 * 365).toISOString();
     const pendingCount = this.replyTasksRepo.getPendingScheduledTasks(farFutureIso).length;
-    const uncertainCount = this.replyTasksRepo.getUncertainTasks().length;
+    const uncertainCount = this.replyTasksRepo.getUncertainTasksCount();
+    const moderationPendingCount = this.replyTasksRepo.getModerationPendingTasksCount();
     const waitingForLoginCount = this.replyTasksRepo.getWaitingForLoginTasksCount();
     const memMb = Math.round(process.memoryUsage().rss / (1024 * 1024));
     const uptimeSec = Math.floor((Date.now() - this.startTime) / 1000);
     const accountName = this.sessionManager ? this.sessionManager.getCachedSessionInfo().accountName : null;
+    const oldestPending = this.replyTasksRepo.getOldestPendingTask();
+    const circuitState = this.circuitBreaker.getState();
+    const cooldownUntil = this.circuitBreaker.getCooldownUntil();
 
     return {
       isRunning: this.isRunning,
@@ -2141,9 +2418,34 @@ export class TaskScheduler {
       isInteractiveLoginActive: this.isInteractiveLoginActive,
       lastPolledAt: this.lastPolledAt,
       nextPolledAt: this.isRunning && this.nextPollExpectedAt ? this.nextPollExpectedAt : null,
+      pollTiming: {
+        lastPollDurationMs: this.lastPollDurationMs
+      },
+      pollLag: {
+        detected: this.lastPollLagDetected,
+        lagSeconds: this.lastPollLagSeconds
+      },
+      catchup: {
+        lastCatchupCommentsCount: this.lastCatchupCommentsCount,
+        limitExceeded: this.commentMonitor.catchupLimitExceeded
+      },
       lastSendResult: this.lastSendResult,
       uptimeSeconds: uptimeSec,
       memoryMb: memMb,
+      circuitBreaker: {
+        state: circuitState,
+        cooldownUntil: cooldownUntil ? new Date(cooldownUntil).toISOString() : null,
+        remainingSeconds: cooldownUntil ? Math.max(0, Math.round((cooldownUntil - Date.now()) / 1000)) : 0
+      },
+      transportCircuitBreaker: this.transportCircuitBreaker.getState(),
+      queueDiagnostics: {
+        pendingTasksCount: pendingCount,
+        uncertainTasksCount: uncertainCount,
+        moderationPendingCount,
+        oldestPendingTaskAt: oldestPending ? oldestPending.scheduled_at : null,
+        lastSendAttemptAt: this.lastSendResult ? this.lastSendResult.timestamp : null,
+        lastSendStatus: this.lastSendResult ? this.lastSendResult.status : null
+      },
       config: {
         profileUrl: this.config.STEAM_PROFILE_URL,
         aiModel: this.config.DEEPSEEK_MODEL,
@@ -2159,7 +2461,11 @@ export class TaskScheduler {
         holidayReplies: holidayReplies,
         pendingTasks: pendingCount,
         uncertainTasks: uncertainCount,
-        waitingForLoginTasks: waitingForLoginCount
+        moderationPendingTasks: moderationPendingCount,
+        waitingForLoginTasks: waitingForLoginCount,
+        circuitBreakerState: circuitState,
+        oldestPendingTaskAt: oldestPending ? oldestPending.scheduled_at : null,
+        lastSendAttemptAt: this.lastSendResult ? this.lastSendResult.timestamp : null
       }
     };
   }

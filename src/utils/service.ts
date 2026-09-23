@@ -121,27 +121,30 @@ export class WindowsServiceHelper {
 
   /**
    * Enables Windows autostart.
-   * Priority: ONSTART (system boot without user logon) -> ONLOGON (user logon)
+   * Default: ONLOGON (User logon with desktop session and 30s delay)
    */
   public static enableAutostart(options?: {
     exePath?: string;
     trigger?: 'ONSTART' | 'ONLOGON';
     taskName?: string;
     dryRun?: boolean;
+    delaySeconds?: number;
   }): AutostartActionResult {
     const taskName = options?.taskName || this.TASK_NAME;
-    const trigger = options?.trigger || 'ONSTART';
+    const trigger = options?.trigger || 'ONLOGON';
     const targetExe = this.resolveTargetExe(options?.exePath);
+    const delaySec = options?.delaySeconds !== undefined ? options?.delaySeconds : 30;
+    const delayArg = delaySec > 0 ? ` /delay 0000:${delaySec.toString().padStart(2, '0')}` : '';
 
     // Assemble schtasks command with --background and --headless flags
     // /f forces overwrite to prevent duplicate tasks
     let cmd = '';
     if (trigger === 'ONSTART') {
       // ONSTART runs on system startup under SYSTEM account without requiring user logon
-      cmd = `schtasks /create /tn "${taskName}" /tr "\\"${targetExe}\\" --background --headless" /sc onstart /ru "SYSTEM" /rl highest /f`;
+      cmd = `schtasks /create /tn "${taskName}" /tr "\\"${targetExe}\\" --background --headless"${delayArg} /sc onstart /ru "SYSTEM" /rl highest /f`;
     } else {
-      // ONLOGON runs when user logs into Windows desktop
-      cmd = `schtasks /create /tn "${taskName}" /tr "\\"${targetExe}\\" --background --headless" /sc onlogon /rl highest /f`;
+      // ONLOGON runs when user logs into Windows desktop (interactive user session, never Session 0)
+      cmd = `schtasks /create /tn "${taskName}" /tr "\\"${targetExe}\\" --background --headless"${delayArg} /sc onlogon /rl highest /f`;
     }
 
     if (options?.dryRun) {
@@ -233,7 +236,7 @@ export class WindowsServiceHelper {
   /**
    * Backward-compatible installation method.
    */
-  public static installTaskScheduler(exePath?: string, trigger: 'ONSTART' | 'ONLOGON' = 'ONSTART'): boolean {
+  public static installTaskScheduler(exePath?: string, trigger: 'ONSTART' | 'ONLOGON' = 'ONLOGON'): boolean {
     const res = this.enableAutostart({ exePath, trigger });
     return res.success;
   }

@@ -51,6 +51,10 @@
           <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><rect x="5" y="5" width="14" height="14"/></svg>
           急停
         </button>
+        <button class="btn btn-outline-danger btn-sm" id="btn-header-exit" title="完全退出程序 (关闭浏览器、释放锁并停止后台进程)">
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+          退出程序
+        </button>
       </div>
     </header>
 
@@ -145,7 +149,10 @@
             <div class="card metric-card">
               <div class="metric-title">待处理任务</div>
               <div class="metric-value text-warning" id="metric-pending-tasks">0</div>
-              <div class="metric-foot">
+              <div class="metric-foot" style="flex-wrap: wrap; gap: 4px 8px;">
+                <span>熔断状态: <b id="metric-circuit-status" class="text-success">CLOSED</b></span>
+                <span>最老待发: <b id="metric-oldest-pending">-</b></span>
+                <span>上次发送: <b id="metric-last-send">-</b></span>
                 <span>等待登录: <b id="metric-waiting-login-tasks">0</b></span>
                 <span>不确定: <b id="metric-uncertain-tasks">0</b></span>
               </div>
@@ -221,6 +228,9 @@
                   <button class="btn btn-outline-warning" id="btn-ctrl-open-login">
                     🔑 唤起 Steam 登录向导
                   </button>
+                  <button class="btn btn-outline-info" id="btn-ctrl-export-diagnostics" title="一键导出系统状态、配置与脱敏日志 ZIP 压缩包">
+                    📦 导出诊断包
+                  </button>
                   <button class="btn btn-danger" id="btn-ctrl-emergency">
                     🛑 紧急停止 (Emergency Stop)
                   </button>
@@ -248,6 +258,14 @@
                 <div class="detail-row">
                   <span class="detail-label">下次预计轮询:</span>
                   <span class="detail-value" id="disp-next-polled">计算中...</span>
+                </div>
+                <div class="detail-row">
+                  <span class="detail-label">轮询延时状态:</span>
+                  <span class="detail-value" id="disp-poll-lag"><span class="badge badge-success">正常 (无滞后)</span></span>
+                </div>
+                <div class="detail-row">
+                  <span class="detail-label">最近抓取留言:</span>
+                  <span class="detail-value" id="disp-catchup-count">0 条</span>
                 </div>
                 <div class="detail-row">
                   <span class="detail-label">运行策略模式:</span>
@@ -527,8 +545,8 @@
                 </div>
                 <div class="form-row" style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
                   <select id="autostart-trigger-select" class="form-control" style="width: auto; min-width: 200px;">
-                    <option value="ONSTART">系统开机自启 (ONSTART - 推荐挂机)</option>
-                    <option value="ONLOGON">用户登录自启 (ONLOGON)</option>
+                    <option value="ONLOGON" selected>用户登录自启 (ONLOGON - 推荐，避免浏览器锁冲突与Session 0)</option>
+                    <option value="ONSTART">系统开机自启 (ONSTART - 无用户登录挂机)</option>
                   </select>
                   <button type="button" class="btn btn-primary" id="btn-autostart-enable">开启自启动</button>
                   <button type="button" class="btn btn-secondary" id="btn-autostart-disable">禁用自启动</button>

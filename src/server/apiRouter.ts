@@ -12,12 +12,16 @@ import { KnowledgeStore } from '../profile/knowledgeStore';
 import { WindowsServiceHelper } from '../utils/service';
 
 import { HolidayRepository } from '../db/repositories/holiday';
+import { createZipArchive, ZipEntry } from '../utils/zip';
+import { sanitizeDiagnosticText, sanitizeDiagnosticObject } from '../utils/sanitizer';
+import { getLogsDir, getAppRoot } from '../utils/paths';
 
 export interface ApiContext {
   scheduler?: TaskScheduler;
   db: AppDatabase;
   config: BotConfig;
   logger: any;
+  onShutdown?: () => Promise<void>;
 }
 
 export class ApiRouter {
@@ -33,7 +37,7 @@ export class ApiRouter {
     this.holidayRepo = new HolidayRepository(this.ctx.db);
   }
 
-  public async handleRequest(reqUrl: URL, method: string, body?: any): Promise<{ status: number; data: any }> {
+  public async handleRequest(reqUrl: URL, method: string, body?: any): Promise<{ status: number; data: any; headers?: Record<string, string>; rawBody?: Buffer }> {
     const pathname = reqUrl.pathname;
 
     try {
@@ -259,6 +263,29 @@ export class ApiRouter {
             message: result.message,
             lifecycleState: this.ctx.scheduler.lifecycleState,
             browserState: this.ctx.scheduler.getBrowserState()
+          }
+        };
+      }
+
+      if (pathname === '/api/bot/exit' && method === 'POST') {
+        this.ctx.logger.warn('PROCESS_EXIT_REQUESTED_VIA_API', 'Full graceful process termination requested');
+        // Trigger asynchronous shutdown after responding to client
+        setTimeout(async () => {
+          if (this.ctx.onShutdown) {
+            await this.ctx.onShutdown();
+          } else {
+            if (this.ctx.scheduler) {
+              await this.ctx.scheduler.stop();
+            }
+            process.exit(0);
+          }
+        }, 500);
+
+        return {
+          status: 200,
+          data: {
+            success: true,
+            message: '程序正在完全退出... 调度器已停止，Playwright 浏览器已关闭，系统锁已释放。'
           }
         };
       }
@@ -555,10 +582,159 @@ export class ApiRouter {
         return { status: 200, data: res };
       }
 
+      // 22. GET /api/diagnostics/export (Sanitized zero-leakage ZIP export)
+      if (pathname === '/api/diagnostics/export' && method === 'GET') {
+        const zipBuffer = await this.buildDiagnosticsZip();
+        const dateStr = new Date().toISOString().replace(/[:.]/g, '-').substring(0, 19);
+        const filename = `steam-bot-diagnostics-${dateStr}.zip`;
+        return {
+          status: 200,
+          data: null,
+          headers: {
+            'Content-Type': 'application/zip',
+            'Content-Disposition': `attachment; filename="${filename}"`
+          },
+          rawBody: zipBuffer
+        };
+      }
+
       return { status: 404, data: { success: false, error: `Route not found: ${method} ${pathname}` } };
     } catch (err: any) {
       return { status: 500, data: { success: false, error: err.message || 'Internal API error' } };
     }
+  }
+
+  public async buildDiagnosticsZip(): Promise<Buffer> {
+    const entries: ZipEntry[] = [];
+
+    // 1. scheduler-summary.json
+    const summary = this.ctx.scheduler
+      ? this.ctx.scheduler.getStatusSummary()
+      : { isRunning: false, note: 'Scheduler not initialized' };
+    entries.push({
+      path: 'scheduler-summary.json',
+      content: JSON.stringify(sanitizeDiagnosticObject(summary), null, 2)
+    });
+
+    // 2. runtime-control.json
+    const runtimeState = RuntimeControl.load();
+    entries.push({
+      path: 'runtime-control.json',
+      content: JSON.stringify(sanitizeDiagnosticObject(runtimeState), null, 2)
+    });
+
+    // 3. config-summary.json (Safe config view with sensitive credentials redacted)
+    const safeConfig = {
+      BOT_MODE: this.ctx.config.BOT_MODE,
+      BOT_ENABLED: this.ctx.config.BOT_ENABLED,
+      EMERGENCY_STOP: this.ctx.config.EMERGENCY_STOP,
+      DRY_RUN: this.ctx.config.DRY_RUN,
+      HEADLESS: this.ctx.config.HEADLESS,
+      BROWSER_MODE: this.ctx.config.BROWSER_MODE,
+      CHECK_INTERVAL_MIN_SECONDS: this.ctx.config.CHECK_INTERVAL_MIN_SECONDS,
+      CHECK_INTERVAL_MAX_SECONDS: this.ctx.config.CHECK_INTERVAL_MAX_SECONDS,
+      MIN_REPLY_DELAY_SECONDS: this.ctx.config.MIN_REPLY_DELAY_SECONDS,
+      MAX_REPLY_DELAY_SECONDS: this.ctx.config.MAX_REPLY_DELAY_SECONDS,
+      MAX_REPLIES_PER_HOUR: this.ctx.config.MAX_REPLIES_PER_HOUR,
+      MAX_REPLIES_PER_DAY: this.ctx.config.MAX_REPLIES_PER_DAY,
+      DEEPSEEK_MODEL: this.ctx.config.DEEPSEEK_MODEL,
+      DEEPSEEK_API_KEY: this.ctx.config.DEEPSEEK_API_KEY ? '[REDACTED]' : '',
+      STEAM_PROFILE_URL: this.ctx.config.STEAM_PROFILE_URL
+    };
+    entries.push({
+      path: 'config-summary.json',
+      content: JSON.stringify(sanitizeDiagnosticObject(safeConfig), null, 2)
+    });
+
+    // 4. tasks-diagnostics.json
+    try {
+      const recentTasks = (this.ctx.db as any).db.prepare(`
+        SELECT task_id, steam_comment_id, target_steam_id, status, attempt_count,
+               transport_retry_count, uncertain_resend_count, uncertain_verify_count,
+               reply_fingerprint, scheduled_at, started_at, completed_at, error_message
+        FROM reply_tasks
+        ORDER BY task_id DESC
+        LIMIT 100
+      `).all();
+      entries.push({
+        path: 'tasks-diagnostics.json',
+        content: JSON.stringify(sanitizeDiagnosticObject(recentTasks), null, 2)
+      });
+    } catch (e: any) {
+      entries.push({
+        path: 'tasks-diagnostics.json',
+        content: JSON.stringify({ error: e.message })
+      });
+    }
+
+    // 5. comments-summary.json
+    try {
+      const statusCounts = (this.ctx.db as any).db.prepare(`
+        SELECT status, count(*) as count FROM comments GROUP BY status
+      `).all();
+      const classCounts = (this.ctx.db as any).db.prepare(`
+        SELECT classification, count(*) as count FROM comments GROUP BY classification
+      `).all();
+      const replySourceCounts = (this.ctx.db as any).db.prepare(`
+        SELECT reply_source, count(*) as count FROM comments GROUP BY reply_source
+      `).all();
+      entries.push({
+        path: 'comments-summary.json',
+        content: JSON.stringify(sanitizeDiagnosticObject({
+          byStatus: statusCounts,
+          byClassification: classCounts,
+          byReplySource: replySourceCounts
+        }), null, 2)
+      });
+    } catch (e: any) {
+      entries.push({
+        path: 'comments-summary.json',
+        content: JSON.stringify({ error: e.message })
+      });
+    }
+
+    // 6. logs-recent.txt
+    let logContent = '[No log files found on disk]';
+    try {
+      const logCandidates = [
+        path.join(getLogsDir(), 'bot.log'),
+        path.join(getLogsDir(), 'output.log'),
+        path.join(getAppRoot(), 'logs', 'bot.log')
+      ];
+      for (const cand of logCandidates) {
+        if (fs.existsSync(cand)) {
+          const stats = fs.statSync(cand);
+          const maxBytes = 512 * 1024; // 512KB tail
+          const start = Math.max(0, stats.size - maxBytes);
+          const buf = Buffer.alloc(Math.min(stats.size, maxBytes));
+          const fd = fs.openSync(cand, 'r');
+          fs.readSync(fd, buf, 0, buf.length, start);
+          fs.closeSync(fd);
+          logContent = sanitizeDiagnosticText(buf.toString('utf-8'));
+          break;
+        }
+      }
+    } catch (e: any) {
+      logContent = `[Error reading logs: ${e.message}]`;
+    }
+    entries.push({
+      path: 'logs-recent.txt',
+      content: logContent
+    });
+
+    // 7. metadata.json
+    entries.push({
+      path: 'metadata.json',
+      content: JSON.stringify({
+        exportedAt: new Date().toISOString(),
+        version: '1.0.3',
+        nodeVersion: process.version,
+        platform: process.platform,
+        arch: process.arch
+      }, null, 2)
+    });
+
+    return createZipArchive(entries);
   }
 
   private getVisualLibrary(): VisualReplyLibrary {

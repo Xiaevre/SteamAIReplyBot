@@ -1,6 +1,6 @@
 {
   "name": "steam-ai-reply-bot",
-  "version": "1.0.0",
+  "version": "1.0.3",
   "description": "Production long-running low-resource Steam AI comment reply bot for Windows",
   "main": "dist/index.js",
   "scripts": {

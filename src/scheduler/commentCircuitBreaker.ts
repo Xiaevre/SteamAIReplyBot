@@ -24,8 +24,8 @@ export class CommentCircuitBreaker {
     private logger: any,
     options?: CircuitBreakerOptions
   ) {
-    this.minCooldownMs = options?.minCooldownMs ?? 15 * 60 * 1000;
-    this.maxCooldownMs = options?.maxCooldownMs ?? 30 * 60 * 1000;
+    this.minCooldownMs = options?.minCooldownMs ?? 2 * 60 * 1000;
+    this.maxCooldownMs = options?.maxCooldownMs ?? 5 * 60 * 1000;
     this.windowMs = options?.windowMs ?? 15 * 60 * 1000;
   }
 

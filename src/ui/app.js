@@ -175,6 +175,27 @@ function updateDashboardUI(data) {
   document.getElementById('metric-waiting-login-tasks').textContent = stats.waitingForLoginTasks || 0;
   document.getElementById('metric-uncertain-tasks').textContent = stats.uncertainTasks || 0;
 
+  // Circuit Breaker and Queue Diagnostics
+  const cbState = (data.circuitBreaker && data.circuitBreaker.state) || stats.circuitBreakerState || 'CLOSED';
+  const cbElem = document.getElementById('metric-circuit-status');
+  if (cbElem) {
+    cbElem.textContent = cbState;
+    cbElem.className = cbState === 'OPEN' ? 'text-danger' : (cbState === 'HALF_OPEN' ? 'text-warning' : 'text-success');
+  }
+
+  const oldestElem = document.getElementById('metric-oldest-pending');
+  if (oldestElem) {
+    const oldestIso = (data.queueDiagnostics && data.queueDiagnostics.oldestPendingTaskAt) || stats.oldestPendingTaskAt;
+    oldestElem.textContent = oldestIso ? formatTime(oldestIso) : '-';
+  }
+
+  const lastSendElem = document.getElementById('metric-last-send');
+  if (lastSendElem) {
+    const lastSendIso = (data.queueDiagnostics && data.queueDiagnostics.lastSendAttemptAt) || stats.lastSendAttemptAt;
+    const lastStatus = (data.queueDiagnostics && data.queueDiagnostics.lastSendStatus) || (data.lastSendResult && data.lastSendResult.status);
+    lastSendElem.textContent = lastSendIso ? `${formatTime(lastSendIso)}${lastStatus ? ' (' + lastStatus + ')' : ''}` : '-';
+  }
+
   const savedCount = (stats.localReplies || 0) + (stats.visualExpressionReplies || 0) + (stats.holidayReplies || 0);
   document.getElementById('metric-saved-requests').textContent = savedCount;
   document.getElementById('metric-spam-count').textContent = stats.spamCount || 0;
@@ -208,6 +229,10 @@ function updateDashboardUI(data) {
       humanQueueVal.innerHTML = `<span class="text-danger">🛑 紧急停止</span>`;
     } else if (stateStr === 'ERROR') {
       humanQueueVal.innerHTML = `<span class="text-danger">❌ 异常 (${escapeHtml(data.lastError || 'ERROR')})</span>`;
+    } else if (cbState === 'OPEN') {
+      humanQueueVal.innerHTML = `<span class="text-danger">⚠️ 熔断冷却中 (OPEN)</span>`;
+    } else if (cbState === 'HALF_OPEN') {
+      humanQueueVal.innerHTML = `<span class="text-warning">🟡 熔断探测中 (HALF_OPEN)</span>`;
     } else if (modeStr === 'DISABLED' || !data.botEnabled) {
       humanQueueVal.innerHTML = `<span class="text-warning">⏸ [${modeStr}] ${stateStr}</span>`;
     } else {
@@ -221,6 +246,13 @@ function updateDashboardUI(data) {
       humanReasonVal.style.color = 'var(--color-danger)';
     } else if (data.sessionState === 'waiting_for_login') {
       humanReasonVal.textContent = 'Steam 登录会话无效，已自动暂停发送以保护账号';
+      humanReasonVal.style.color = 'var(--color-warning)';
+    } else if (cbState === 'OPEN') {
+      const remSec = (data.circuitBreaker && data.circuitBreaker.remainingSeconds) || 0;
+      humanReasonVal.textContent = `Steam 发送触发熔断保护 (OPEN)，安全冷却中${remSec ? ' (剩余 ' + remSec + 's)' : ''}，到期后自动探针恢复`;
+      humanReasonVal.style.color = 'var(--color-danger)';
+    } else if (cbState === 'HALF_OPEN') {
+      humanReasonVal.textContent = '熔断冷却已到期，正在执行单次健康探针以验证 Steam 发送能力';
       humanReasonVal.style.color = 'var(--color-warning)';
     } else if (!data.botEnabled) {
       humanReasonVal.textContent = '管理员手动暂停了回复队列';
@@ -307,6 +339,22 @@ function updateDashboardUI(data) {
     const bState = data.browserState || 'RELEASED';
     const bCls = bState === 'ACTIVE' ? 'badge-success' : 'badge-secondary';
     dispBrowser.innerHTML = `<span class="badge ${bCls}">${escapeHtml(bState)}</span>`;
+  }
+
+  const dispLag = document.getElementById('disp-poll-lag');
+  if (dispLag) {
+    if (data.pollLag && data.pollLag.detected) {
+      dispLag.innerHTML = `<span class="badge badge-danger">⚠️ 滞后 ${data.pollLag.lagSeconds}s</span>`;
+    } else {
+      dispLag.innerHTML = `<span class="badge badge-success">正常 (无滞后)</span>`;
+    }
+  }
+
+  const dispCatchup = document.getElementById('disp-catchup-count');
+  if (dispCatchup) {
+    const count = (data.catchup && data.catchup.lastCatchupCommentsCount) || 0;
+    const exceeded = (data.catchup && data.catchup.limitExceeded);
+    dispCatchup.innerHTML = `${count} 条${exceeded ? ' <span class="badge badge-warning">达到500条上限</span>' : ''}`;
   }
 
   if (data.lastSendResult) {
@@ -603,7 +651,7 @@ function setupAutostartHandlers() {
     btnEnable.addEventListener('click', async () => {
       btnEnable.disabled = true;
       try {
-        const trigger = selTrigger ? selTrigger.value : 'ONSTART';
+        const trigger = selTrigger ? selTrigger.value : 'ONLOGON';
         const res = await fetch(`${API_BASE}/api/autostart/enable`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -931,6 +979,25 @@ function setupActionButtons() {
       handleAction('/api/bot/emergency-stop', '紧急停止已生效');
     }
   });
+  const btnHeaderExit = document.getElementById('btn-header-exit');
+  if (btnHeaderExit) {
+    btnHeaderExit.addEventListener('click', async () => {
+      if (confirm('确认完全退出 SteamAIReplyBot？\n\n程序将停止所有任务、关闭 Playwright 浏览器、释放系统锁并退出后台进程。')) {
+        showToast('正在完全退出程序...', 'warning');
+        try {
+          await fetch(`${API_BASE}/api/bot/exit`, { method: 'POST' });
+        } catch {}
+        setTimeout(() => {
+          document.body.innerHTML = `
+            <div style="display: flex; height: 100vh; justify-content: center; align-items: center; background: #171a21; color: #c5c3c0; font-family: sans-serif; flex-direction: column;">
+              <h2 style="color: #66c0f4; margin-bottom: 8px;">SteamAIReplyBot 已完全退出</h2>
+              <p style="color: #8f98a0; font-size: 14px;">后台调度器已安全停止，浏览器与数据锁均已释放。您可以安全关闭此浏览器标签页。</p>
+            </div>
+          `;
+        }, 1000);
+      }
+    });
+  }
 
   // Dashboard buttons
   document.getElementById('btn-ctrl-pause').addEventListener('click', () => handleAction('/api/bot/pause', '发送队列已暂停'));
@@ -957,10 +1024,41 @@ function setupActionButtons() {
   const btnHumanLogin = document.getElementById('btn-human-login');
   if (btnHumanLogin) btnHumanLogin.addEventListener('click', triggerLogin);
 
+  const btnExportDiag = document.getElementById('btn-ctrl-export-diagnostics');
+  if (btnExportDiag) {
+    btnExportDiag.addEventListener('click', triggerExportDiagnostics);
+  }
+
   document.getElementById('btn-manual-refresh').addEventListener('click', () => {
     fetchStatus();
     showToast('已更新状态', 'info');
   });
+}
+
+async function triggerExportDiagnostics() {
+  showToast('正在生成并导出系统诊断包 (ZIP)...', 'info');
+  try {
+    const res = await fetch(`${API_BASE}/api/diagnostics/export`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const blob = await res.blob();
+    const disposition = res.headers.get('content-disposition');
+    let filename = 'steam-bot-diagnostics.zip';
+    if (disposition && disposition.includes('filename=')) {
+      const match = disposition.match(/filename="?([^"]+)"?/);
+      if (match && match[1]) filename = match[1];
+    }
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    window.URL.revokeObjectURL(url);
+    showToast(`诊断包导出成功: ${filename}`, 'success');
+  } catch (err) {
+    showToast(`导出诊断包失败: ${err.message}`, 'danger');
+  }
 }
 
 // 9. Modal Management

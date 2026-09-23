@@ -199,6 +199,7 @@ async function runModerationTests() {
 
   // 3. Recovery check when Steam releases bot's comment -> FOUND
   mockTargetCheckResult = 'FOUND';
+  db.prepare("UPDATE reply_tasks SET uncertain_last_checked_at = NULL").run();
   await scheduler.runModerationPendingRecoveryStep();
   const taskReleasedAndVerified = scheduler.replyTasksRepo.findByCommentId('comment_mod_02');
   assert.strictEqual(taskReleasedAndVerified.status, 'replied', 'Should become replied once FOUND on target profile');
@@ -207,6 +208,7 @@ async function runModerationTests() {
 
   // 4. Test safe idempotency when check is NOT_FOUND: must strictly remain submitted_moderation_pending (NO RESEND)
   scheduler.replyTasksRepo.updateStatus(taskReleasedAndVerified.task_id, 'submitted_moderation_pending', { attempt_count: 0 });
+  db.prepare("UPDATE reply_tasks SET uncertain_last_checked_at = NULL").run();
   mockTargetCheckResult = 'NOT_FOUND';
   await scheduler.runModerationPendingRecoveryStep();
   const taskAfterNotFound = scheduler.replyTasksRepo.findByCommentId('comment_mod_02');
@@ -214,6 +216,7 @@ async function runModerationTests() {
 
   // 5. Test check is UNCERTAIN: retains moderation pending state
   scheduler.replyTasksRepo.updateStatus(taskAfterNotFound.task_id, 'submitted_moderation_pending');
+  db.prepare("UPDATE reply_tasks SET uncertain_last_checked_at = NULL").run();
   mockTargetCheckResult = 'UNCERTAIN';
   await scheduler.runModerationPendingRecoveryStep();
   const taskAfterUncertain = scheduler.replyTasksRepo.findByCommentId('comment_mod_02');

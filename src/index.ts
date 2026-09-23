@@ -343,7 +343,15 @@ async function main() {
 
   if (!isNoUi) {
     try {
-      webServer = new WebServer({ scheduler, db, config, logger });
+      webServer = new WebServer({
+        scheduler,
+        db,
+        config,
+        logger,
+        onShutdown: async () => {
+          await shutdownHandler('API_EXIT');
+        }
+      });
       serverPort = await webServer.start(3000);
       webUrl = `http://127.0.0.1:${serverPort}`;
       console.log(`[SteamAIReplyBot] 🌐 Web 管理面板已启动: ${webUrl}`);

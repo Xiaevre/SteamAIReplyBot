@@ -62,3 +62,9 @@ inspect_cookies.js
 release.zip
 *.tar.gz
 *.zip
+
+# Build and Release Staging Artifacts
+artifacts/
+github-release/
+RELEASE_AUDIT.md
+tools/

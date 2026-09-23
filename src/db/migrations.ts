@@ -125,5 +125,46 @@ export function runMigrations(db: AppDatabase): void {
         new Date().toISOString()
       );
     })();
+    currentVersion = getCurrentVersion();
+  }
+
+  if (currentVersion < 3) {
+    db.transaction(() => {
+      // 6. comment_monitor_state table for incremental catch-up cursor persistence
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS comment_monitor_state (
+          id INTEGER PRIMARY KEY CHECK (id = 1),
+          last_seen_comment_id TEXT,
+          updated_at TEXT NOT NULL
+        );
+        INSERT OR IGNORE INTO comment_monitor_state (id, last_seen_comment_id, updated_at) VALUES (1, NULL, CURRENT_TIMESTAMP);
+      `);
+
+      // Add network retry and UNCERTAIN verification tracking columns safely
+      const tableInfo = db.prepare("PRAGMA table_info(reply_tasks)").all() as Array<{ name: string }>;
+      const existingCols = new Set(tableInfo.map(c => c.name));
+
+      if (!existingCols.has('transport_retry_count')) {
+        db.exec("ALTER TABLE reply_tasks ADD COLUMN transport_retry_count INTEGER NOT NULL DEFAULT 0;");
+      }
+      if (!existingCols.has('uncertain_resend_count')) {
+        db.exec("ALTER TABLE reply_tasks ADD COLUMN uncertain_resend_count INTEGER NOT NULL DEFAULT 0;");
+      }
+      if (!existingCols.has('uncertain_verify_count')) {
+        db.exec("ALTER TABLE reply_tasks ADD COLUMN uncertain_verify_count INTEGER NOT NULL DEFAULT 0;");
+      }
+      if (!existingCols.has('uncertain_last_checked_at')) {
+        db.exec("ALTER TABLE reply_tasks ADD COLUMN uncertain_last_checked_at TEXT;");
+      }
+      if (!existingCols.has('reply_fingerprint')) {
+        db.exec("ALTER TABLE reply_tasks ADD COLUMN reply_fingerprint TEXT;");
+      }
+
+      db.prepare('INSERT INTO schema_version (version, applied_at) VALUES (?, ?)').run(
+        3,
+        new Date().toISOString()
+      );
+    })();
   }
 }
+

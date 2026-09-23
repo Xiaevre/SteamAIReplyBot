@@ -12,7 +12,7 @@
 <p align="center">
   <a href="https://github.com/Xiaevre/SteamAIReplyBot"><img src="https://img.shields.io/badge/GitHub-Xiaevre%2FSteamAIReplyBot-blue?logo=github" alt="GitHub Repository" /></a>
   <a href="#5-三种运行模式"><img src="https://img.shields.io/badge/Mode-Local%200%20Token%20%7C%20AI%20Enhanced-66c0f4.svg" alt="Operational Modes" /></a>
-  <a href="#15-测试与稳定性保证"><img src="https://img.shields.io/badge/Tests-28%2F28%20Passing-brightgreen.svg" alt="Tests" /></a>
+  <a href="#15-测试与稳定性保证"><img src="https://img.shields.io/badge/Tests-31%2F31%20Passing-brightgreen.svg" alt="Tests" /></a>
   <a href="#12-windows-后台运行与开机自启动"><img src="https://img.shields.io/badge/Platform-Windows%20x64-0078d4.svg" alt="Platform" /></a>
   <a href="#17-开源协议"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License" /></a>
 </p>
@@ -239,7 +239,7 @@ stateDiagram-v2
 
 最终用户解压即可运行，无需预装 Node.js 或编译环境：
 
-1. 前往 [Releases 页面](https://github.com/Xiaevre/SteamAIReplyBot/releases) 下载 `SteamAIReplyBot-v1.0.0-windows-x64.zip`；
+1. 前往 [Releases 页面](https://github.com/Xiaevre/SteamAIReplyBot/releases) 下载 `SteamAIReplyBot-v1.0.3-windows-x64.zip`；
 2. 解压缩至任意目录（建议使用无空格的纯英文路径）；
 3. 复制 `config.example.json` 为 `config.json`，填入您的 Steam 个人主页链接：
    ```json
@@ -400,7 +400,7 @@ node tests/runAllTests.js
 
 ```text
 ====================================================
-Summary: 28/28 test suites PASSED
+Summary: 31/31 test suites PASSED
 ====================================================
 [PASS] Suite 1:  Database Migration & Schema Resilience
 [PASS] Suite 2:  Spam & Phishing Detection Accuracy
@@ -430,6 +430,9 @@ Summary: 28/28 test suites PASSED
 [PASS] Suite 26: Startup Recovery & Interactive Login Race Safety
 [PASS] Suite 27: Today Stats & Total Replies Accounting Accuracy
 [PASS] Suite 28: Web UI DOM Hierarchy & Rendering Integrity
+[PASS] Suite 29: Circuit Breaker & Queue Decoupling Acceptance
+[PASS] Suite 30: Browser Profile Recovery & Lifecycle Stability
+[PASS] Suite 31: Poll Decoupling, Incremental Catch-up & Diagnostics
 ```
 
 ---
@@ -444,6 +447,23 @@ Summary: 28/28 test suites PASSED
 
 ---
 
-## 17. 开源协议
+## 17. 更新日志 (Changelog)
+
+### v1.0.3
+- **Poll 与 Recovery 完全解耦**：解决 Recovery 在遇到网络抖动或任务积压时长时间阻塞 Monitor Poll 轮询的问题，实行任务级独立等待窗口与非阻塞离散调度。
+- **增量分页追赶 (Incremental Catch-up)**：Comment Monitor 支持自适应分页追赶并持久化 `lastSeenCommentId` 游标，彻底避免因 Steam 默认仅返回 6 条评论而产生留言漏判盲区。
+- **发送失败分类与安全网络重试**：严格区分 Pre-Send 传输层网络故障与 Post-Attempted 未决超时；网络抖动重试与业务发信次数彻底解耦，保障网络偶发异常时不丢失发信机会。
+- **UNCERTAIN 双重高置信度核验**：复用增量分页能力，结合双方 SteamID、时间窗口与回复指纹进行多因子核验；对高置信度一致未发送任务赋予最多一次安全补发机会 (`SAFE_TO_RESEND`)，并施加第三次 POST 硬锁保护杜绝多发。
+- **运行诊断与一键导出脱敏包**：控制面板与 CLI 新增 Poll lag、延迟队列与熔断状态诊断展示，支持一键打包导出已全面脱敏的系统诊断包。
+
+### v1.0.2
+- **Browser lifecycle recovery**: 增加 Browser Profile 启动前健康检查，自动检测并安全清理孤立 `SingletonLock` / `lockfile` 残留，智能识别活跃 Edge 进程；Playwright 启动失败增加 3 级弹性退避重试（5s / 10s / 30s）。
+- **Windows autostart stability improvements**: Windows 开机自启任务计划默认由 `ONSTART`（Session 0）全面优化为 `ONLOGON`（用户登录后以桌面会话运行），并加入 30 秒开机环境沉降等待窗口，彻底解决系统早期引导时 Edge `exitCode=1002` 问题。
+- **Graceful shutdown support**: Web 控制面板顶部全新增加「退出程序」交互按钮，支持由前端通过 `POST /api/bot/exit` 优雅注销调度器、关闭浏览器内核、释放实例互斥锁与数据连接并完全退出进程。
+- **Queue diagnostics improvements**: 持续优化控制台运行诊断输出，结构化输出 `[BROWSER_BOOT_CHECK]` 诊断指标，增强熔断状态与队列最老任务追踪展示。
+
+---
+
+## 18. 开源协议
 
 本项目基于 [MIT License](LICENSE) 授权开源，欢迎提交 Issue 与 Pull Request 共同改进！

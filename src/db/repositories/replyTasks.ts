@@ -7,11 +7,16 @@ export interface ReplyTaskRecord {
   target_steam_id: string;
   target_profile_url: string;
   reply_text: string;
-  status: string; // 'scheduled' | 'waiting' | 'sending' | 'replied' | 'skipped' | 'failed' | 'uncertain_send_state'
+  status: string; // 'scheduled' | 'waiting' | 'sending' | 'replied' | 'skipped' | 'failed' | 'uncertain_send_state' | 'UNCERTAIN_VERIFY_PENDING' | 'UNCERTAIN_VERIFYING' | 'UNCERTAIN_DELAYED_RECHECK' | 'UNCERTAIN_FINAL' | 'SAFE_TO_RESEND'
   scheduled_at: string;
   started_at?: string;
   completed_at?: string;
   attempt_count: number;
+  transport_retry_count?: number;
+  uncertain_resend_count?: number;
+  uncertain_verify_count?: number;
+  uncertain_last_checked_at?: string;
+  reply_fingerprint?: string;
   created_at: string;
 }
 
@@ -59,7 +64,17 @@ export class ReplyTasksRepository {
   public updateStatus(
     taskId: string,
     status: string,
-    extra?: { started_at?: string; completed_at?: string; attempt_count?: number; scheduled_at?: string }
+    extra?: {
+      started_at?: string;
+      completed_at?: string;
+      attempt_count?: number;
+      scheduled_at?: string;
+      transport_retry_count?: number;
+      uncertain_resend_count?: number;
+      uncertain_verify_count?: number;
+      uncertain_last_checked_at?: string;
+      reply_fingerprint?: string;
+    }
   ): void {
     let query = 'UPDATE reply_tasks SET status = ?';
     const params: any[] = [status];
@@ -80,6 +95,26 @@ export class ReplyTasksRepository {
       query += ', scheduled_at = ?';
       params.push(extra.scheduled_at);
     }
+    if (extra?.transport_retry_count !== undefined) {
+      query += ', transport_retry_count = ?';
+      params.push(extra.transport_retry_count);
+    }
+    if (extra?.uncertain_resend_count !== undefined) {
+      query += ', uncertain_resend_count = ?';
+      params.push(extra.uncertain_resend_count);
+    }
+    if (extra?.uncertain_verify_count !== undefined) {
+      query += ', uncertain_verify_count = ?';
+      params.push(extra.uncertain_verify_count);
+    }
+    if (extra?.uncertain_last_checked_at !== undefined) {
+      query += ', uncertain_last_checked_at = ?';
+      params.push(extra.uncertain_last_checked_at);
+    }
+    if (extra?.reply_fingerprint !== undefined) {
+      query += ', reply_fingerprint = ?';
+      params.push(extra.reply_fingerprint);
+    }
 
     query += ' WHERE task_id = ?';
     params.push(taskId);
@@ -90,9 +125,17 @@ export class ReplyTasksRepository {
   public getPendingScheduledTasks(beforeIso: string): ReplyTaskRecord[] {
     return this.db
       .prepare(
-        "SELECT * FROM reply_tasks WHERE status IN ('scheduled', 'waiting') AND scheduled_at <= ? ORDER BY scheduled_at ASC"
+        "SELECT * FROM reply_tasks WHERE status IN ('scheduled', 'waiting') AND scheduled_at <= ? ORDER BY attempt_count ASC, scheduled_at ASC"
       )
       .all(beforeIso) as ReplyTaskRecord[];
+  }
+
+  public getOldestPendingTask(): ReplyTaskRecord | undefined {
+    return this.db
+      .prepare(
+        "SELECT * FROM reply_tasks WHERE status IN ('scheduled', 'waiting') ORDER BY scheduled_at ASC LIMIT 1"
+      )
+      .get() as ReplyTaskRecord | undefined;
   }
 
   public getUnfinishedSendingTasks(): ReplyTaskRecord[] {
@@ -101,16 +144,34 @@ export class ReplyTasksRepository {
       .all() as ReplyTaskRecord[];
   }
 
-  public getUncertainTasks(): ReplyTaskRecord[] {
+  public getUncertainTasks(limit: number = 3): ReplyTaskRecord[] {
     return this.db
-      .prepare("SELECT * FROM reply_tasks WHERE status = 'uncertain_send_state'")
-      .all() as ReplyTaskRecord[];
+      .prepare(
+        "SELECT * FROM reply_tasks WHERE status IN ('uncertain_send_state', 'UNCERTAIN_VERIFY_PENDING', 'UNCERTAIN_DELAYED_RECHECK') ORDER BY id ASC LIMIT ?"
+      )
+      .all(limit) as ReplyTaskRecord[];
   }
 
-  public getModerationPendingTasks(): ReplyTaskRecord[] {
+  public getUncertainTasksCount(): number {
+    const row = this.db
+      .prepare(
+        "SELECT COUNT(*) as count FROM reply_tasks WHERE status IN ('uncertain_send_state', 'UNCERTAIN_VERIFY_PENDING', 'UNCERTAIN_DELAYED_RECHECK')"
+      )
+      .get() as { count: number } | undefined;
+    return row?.count || 0;
+  }
+
+  public getModerationPendingTasks(limit: number = 3): ReplyTaskRecord[] {
     return this.db
-      .prepare("SELECT * FROM reply_tasks WHERE status = 'submitted_moderation_pending'")
-      .all() as ReplyTaskRecord[];
+      .prepare("SELECT * FROM reply_tasks WHERE status = 'submitted_moderation_pending' ORDER BY id ASC LIMIT ?")
+      .all(limit) as ReplyTaskRecord[];
+  }
+
+  public getModerationPendingTasksCount(): number {
+    const row = this.db
+      .prepare("SELECT COUNT(*) as count FROM reply_tasks WHERE status = 'submitted_moderation_pending'")
+      .get() as { count: number } | undefined;
+    return row?.count || 0;
   }
 
   public cancelAllPendingTasks(): number {
